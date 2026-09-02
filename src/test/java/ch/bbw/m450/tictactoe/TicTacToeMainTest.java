@@ -14,11 +14,8 @@ public class TicTacToeMainTest implements WithAssertions {
         assertTrue(true);
     }
 
-    // GIVEN a board where the top row is fully occupied by CROSS
-    // WHEN isWin is checked for CROSS
-    // THEN it returns true
     @Test
-    void isWin_detectsWinInTopRow() {
+    void given_topRowFullOfCross_when_isWinIsChecked_then_returnsTrue() {
         var board = new Stone[]{
                 Stone.CROSS, Stone.CROSS, Stone.CROSS,
                 null, null, null,
@@ -28,11 +25,8 @@ public class TicTacToeMainTest implements WithAssertions {
         assertThat(TicTacToeMain.isWin(board, Stone.CROSS)).isTrue();
     }
 
-    // GIVEN a board where the middle column is fully occupied by CIRCLE
-    // WHEN isWin is checked for CIRCLE
-    // THEN it returns true
     @Test
-    void isWin_detectsWinInMiddleColumn() {
+    void given_middleColumnFullOfCircle_when_isWinIsChecked_then_returnsTrue() {
         var board = new Stone[]{
                 null, Stone.CIRCLE, null,
                 null, Stone.CIRCLE, null,
@@ -42,11 +36,8 @@ public class TicTacToeMainTest implements WithAssertions {
         assertThat(TicTacToeMain.isWin(board, Stone.CIRCLE)).isTrue();
     }
 
-    // GIVEN a board where the diagonal from top-left to bottom-right is fully occupied by CROSS
-    // WHEN isWin is checked for CROSS
-    // THEN it returns true
     @Test
-    void isWin_detectsWinInDiagonal() {
+    void given_diagonalFullOfCross_when_isWinIsChecked_then_returnsTrue() {
         var board = new Stone[]{
                 Stone.CROSS, null, null,
                 null, Stone.CROSS, null,
@@ -56,22 +47,16 @@ public class TicTacToeMainTest implements WithAssertions {
         assertThat(TicTacToeMain.isWin(board, Stone.CROSS)).isTrue();
     }
 
-    // GIVEN an empty board
-    // WHEN isWin is checked for either color
-    // THEN it returns false
     @Test
-    void isWin_returnsFalseOnEmptyBoard() {
+    void given_emptyBoard_when_isWinIsChecked_then_returnsFalse() {
         var board = new Stone[TicTacToeMain.BOARD_SIZE];
 
         assertThat(TicTacToeMain.isWin(board, Stone.CROSS)).isFalse();
         assertThat(TicTacToeMain.isWin(board, Stone.CIRCLE)).isFalse();
     }
 
-    // GIVEN the same player instance passed as both xPlayer and oPlayer
-    // WHEN play is called
-    // THEN an IllegalArgumentException is thrown
     @Test
-    void play_throwsIllegalArgumentException_whenSamePlayerInstancePlaysBothSides() {
+    void given_samePlayerInstanceForBothSides_when_playIsCalled_then_throwsIllegalArgumentException() {
         var player = new GreedyPlayer();
 
         assertThatThrownBy(() -> TicTacToeMain.play(player, player))
