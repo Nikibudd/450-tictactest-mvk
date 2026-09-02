@@ -16,31 +16,18 @@ Testklasse: `src/test/java/ch/bbw/m450/tictactoe/TicTacToeMainTest.java`
 | **WHEN** | `assertTrue(true)` wird ausgewertet. |
 | **THEN** | Der Test besteht immer – dient als Nachweis, dass JUnit 5 korrekt eingerichtet ist. |
 
-## 1. `given_topRowFullOfCross_when_isWinIsChecked_then_returnsTrue`
+## 1. `given_boardWithWinningLineOfCross_when_isWinIsChecked_then_returnsTrue` (parametrisiert)
+
+Ein `@ParameterizedTest` mit `@MethodSource`, der über alle 8 möglichen
+Gewinnlinien (3 Reihen, 3 Spalten, 2 Diagonalen) läuft.
 
 | | |
 |---|---|
-| **GIVEN** | Ein Spielbrett, auf dem die oberste Reihe (Felder 0, 1, 2) vollständig mit `CROSS` belegt ist, alle übrigen Felder sind leer. |
-| **WHEN** | `TicTacToeMain.isWin(board, Stone.CROSS)` wird aufgerufen. |
-| **THEN** | Die Methode gibt `true` zurück, da eine horizontale Dreierreihe vorliegt. |
+| **GIVEN** | Ein Spielbrett, auf dem genau eine Gewinnlinie (z. B. Felder 0, 1, 2 für die oberste Reihe) vollständig mit `CROSS` belegt ist, alle übrigen Felder sind leer. Die Testfälle sind: `{0,1,2}`, `{3,4,5}`, `{6,7,8}` (Reihen), `{0,3,6}`, `{1,4,7}`, `{2,5,8}` (Spalten), `{0,4,8}`, `{2,4,6}` (Diagonalen). |
+| **WHEN** | `TicTacToeMain.isWin(board, Stone.CROSS)` wird für jede der 8 Gewinnlinien aufgerufen. |
+| **THEN** | Die Methode gibt in jedem der 8 Fälle `true` zurück. |
 
-## 2. `given_middleColumnFullOfCircle_when_isWinIsChecked_then_returnsTrue`
-
-| | |
-|---|---|
-| **GIVEN** | Ein Spielbrett, auf dem die mittlere Spalte (Felder 1, 4, 7) vollständig mit `CIRCLE` belegt ist, alle übrigen Felder sind leer. |
-| **WHEN** | `TicTacToeMain.isWin(board, Stone.CIRCLE)` wird aufgerufen. |
-| **THEN** | Die Methode gibt `true` zurück, da eine vertikale Dreierreihe vorliegt. |
-
-## 3. `given_diagonalFullOfCross_when_isWinIsChecked_then_returnsTrue`
-
-| | |
-|---|---|
-| **GIVEN** | Ein Spielbrett, auf dem die Diagonale von oben-links nach unten-rechts (Felder 0, 4, 8) vollständig mit `CROSS` belegt ist, alle übrigen Felder sind leer. |
-| **WHEN** | `TicTacToeMain.isWin(board, Stone.CROSS)` wird aufgerufen. |
-| **THEN** | Die Methode gibt `true` zurück, da eine diagonale Dreierreihe vorliegt. |
-
-## 4. `given_emptyBoard_when_isWinIsChecked_then_returnsFalse`
+## 2. `given_emptyBoard_when_isWinIsChecked_then_returnsFalse`
 
 | | |
 |---|---|
@@ -48,7 +35,7 @@ Testklasse: `src/test/java/ch/bbw/m450/tictactoe/TicTacToeMainTest.java`
 | **WHEN** | `TicTacToeMain.isWin(board, color)` wird für `CROSS` und für `CIRCLE` aufgerufen. |
 | **THEN** | Die Methode gibt in beiden Fällen `false` zurück, da keine Dreierreihe existiert. |
 
-## 5. `given_samePlayerInstanceForBothSides_when_playIsCalled_then_throwsIllegalArgumentException`
+## 3. `given_samePlayerInstanceForBothSides_when_playIsCalled_then_throwsIllegalArgumentException`
 
 | | |
 |---|---|
