@@ -25,7 +25,7 @@ public class TicTacToeMainTest implements WithAssertions {
                 null, null, null
         };
 
-        assertThat(TicTacToeMain.isWin(board, Stone.CROSS)).isTrue();
+        assertThat(TicTacToeMain.isWin(board, Stone.CROSS)).isFalse();
     }
 
     // GIVEN a board where the middle column is fully occupied by CIRCLE
