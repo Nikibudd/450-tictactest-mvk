@@ -16,40 +16,28 @@ public class TicTacToeMainTest implements WithAssertions {
 
     @Test
     void given_topRowFullOfCross_when_isWinIsChecked_then_returnsTrue() {
-        var board = new Stone[]{
-                Stone.CROSS, Stone.CROSS, Stone.CROSS,
-                null, null, null,
-                null, null, null
-        };
+        var board = boardWithStonesAt(Stone.CROSS, 0, 1, 2);
 
         assertThat(TicTacToeMain.isWin(board, Stone.CROSS)).isTrue();
     }
 
     @Test
     void given_middleColumnFullOfCircle_when_isWinIsChecked_then_returnsTrue() {
-        var board = new Stone[]{
-                null, Stone.CIRCLE, null,
-                null, Stone.CIRCLE, null,
-                null, Stone.CIRCLE, null
-        };
+        var board = boardWithStonesAt(Stone.CIRCLE, 1, 4, 7);
 
         assertThat(TicTacToeMain.isWin(board, Stone.CIRCLE)).isTrue();
     }
 
     @Test
     void given_diagonalFullOfCross_when_isWinIsChecked_then_returnsTrue() {
-        var board = new Stone[]{
-                Stone.CROSS, null, null,
-                null, Stone.CROSS, null,
-                null, null, Stone.CROSS
-        };
+        var board = boardWithStonesAt(Stone.CROSS, 0, 4, 8);
 
         assertThat(TicTacToeMain.isWin(board, Stone.CROSS)).isTrue();
     }
 
     @Test
     void given_emptyBoard_when_isWinIsChecked_then_returnsFalse() {
-        var board = new Stone[TicTacToeMain.BOARD_SIZE];
+        var board = emptyBoard();
 
         assertThat(TicTacToeMain.isWin(board, Stone.CROSS)).isFalse();
         assertThat(TicTacToeMain.isWin(board, Stone.CIRCLE)).isFalse();
@@ -62,5 +50,17 @@ public class TicTacToeMainTest implements WithAssertions {
         assertThatThrownBy(() -> TicTacToeMain.play(player, player))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("players must differ");
+    }
+
+    private static Stone[] emptyBoard() {
+        return new Stone[TicTacToeMain.BOARD_SIZE];
+    }
+
+    private static Stone[] boardWithStonesAt(Stone color, int... positions) {
+        var board = emptyBoard();
+        for (var position : positions) {
+            board[position] = color;
+        }
+        return board;
     }
 }
