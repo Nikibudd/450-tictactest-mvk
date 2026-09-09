@@ -16,6 +16,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
     permissions:
       contents: read
       packages: read
@@ -32,6 +33,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
     permissions:
       contents: read
       packages: read
