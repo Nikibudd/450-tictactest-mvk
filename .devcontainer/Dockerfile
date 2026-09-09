@@ -29,6 +29,7 @@ RUN ARCH="$(uname -m)" \
 ENV JAVA_HOME=/opt/zulu25
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
+
 # Pre-create with dev ownership: when the named volume for the gradle cache
 # mounts here for the first time, Docker copies whatever is already at this
 # path in the image (owner included) into the new volume. Without this, the
