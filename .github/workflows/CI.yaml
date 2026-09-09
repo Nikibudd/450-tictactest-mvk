@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:latest
       credentials:
@@ -27,7 +27,7 @@ jobs:
         run: ./gradlew build -x test
   test:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:latest
       credentials:
