@@ -1,0 +1,25 @@
+{
+	"name": "tictactoe (Alpine, Java 25)",
+	"build": { "dockerfile": "Dockerfile" },
+	"remoteUser": "dev",
+	"mounts": [
+		"source=${localEnv:HOME}/.ssh,target=/home/dev/.ssh,type=bind,readonly",
+		"source=tictactest-gradle-cache,target=/home/dev/.gradle,type=volume"
+	],
+	"postCreateCommand": "chmod +x ./gradlew && git config --global --add safe.directory ${containerWorkspaceFolder}",
+	"customizations": {
+		"jetbrains": {
+			"backend": "IntelliJ",
+			"plugins": [
+				"com.intellij.java",
+				"org.jetbrains.plugins.gradle"
+			]
+		},
+		"vscode": {
+			"extensions": [
+				"vscjava.vscode-java-pack",
+				"vscjava.vscode-gradle"
+			]
+		}
+	}
+}
