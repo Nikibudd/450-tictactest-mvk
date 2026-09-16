@@ -98,3 +98,37 @@ These are gaps identified while reviewing the current test suite, not yet implem
 - A test for `play` where a player returns an out of range or already occupied position, expecting an `IllegalStateException`.
 - A test verifying `Stone.opponent()` returns the correct opposite value for both `CROSS` and `CIRCLE`.
 - A test verifying `isWin` returns `false` on a board that is full but has no winning line (draw situation).
+
+## 8. Audit (2026-09-16)
+
+Auditor: Philipp Noel Derks
+Gegenstand: dieses Dokument. Der Code (`TicTacToeMain.java`, `TicTacToeMainTest.java`) wurde für dieses Audit nicht eingesehen; Befunde, die von der Implementierung abhängen, sind entsprechend markiert.
+Ergebnis: 2 kritisch, 4 hoch, 5 mittel, 4 niedrig. Das Konzept war in diesem Zustand nicht abgabereif. Die Probleme lagen weniger im Stil als in unbelegten Aussagen und einer fehlenden Testbasis.
+
+### Befunde
+
+| ID | Schwere | Ort | Befund | Massnahme |
+|---|---|---|---|---|
+| K1 | Kritisch | §6 | "Complete coverage of every branch inside isWin" wurde ohne Messung behauptet. Es gab kein Coverage-Tool (§3). | JaCoCo einbinden und den gemessenen Wert eintragen, oder die Aussage streichen. |
+| K2 | Kritisch | §5, §6 | Kein Test prüft, ob die Farbe berücksichtigt wird. Eine Implementierung, die "3 gleiche nicht-null Steine" prüft statt "3× color", besteht alle Tests. | Testfall: CROSS-Linie, `isWin(board, CIRCLE)` → `false`. |
+| H1 | Hoch | §6 | (abhängig von der Implementierung) Bei einer typischen Prüfung `b[x]==c && b[y]==c && b[z]==c` wird der Fall "erste und zweite Bedingung wahr, dritte falsch" wahrscheinlich nie erreicht. Das leere Brett scheitert immer an der ersten Bedingung. Die 8 Gewinnlinien scheitern in vorher geprüften Linien höchstens an der zweiten, z.B. prüft Linie 0,3,6 zuerst 0,1,2 mit b0=T, b1=F. Damit wäre die Branch Coverage unvollständig. | Beinahe-Linien testen: 2 von 3 besetzt, sowie 2× CROSS + 1× CIRCLE. |
+| H2 | Hoch | gesamt | Es fehlt eine Testbasis: keine Anforderungen und keine Spezifikation, gegen die getestet wird. Die Soll-Werte sind offensichtlich aus dem Code abgeleitet. Dadurch bestätigen die Tests die Implementierung, statt sie zu prüfen. | Anforderungen formulieren (Spielregeln, Verhalten bei ungültigem Zug, Unentschieden) und die Testfälle darauf referenzieren. |
+| H3 | Hoch | §1, §6 | Die Risikoverteilung ist invertiert. `isWin` ist trivial und am besten getestet. `play` enthält Zugwechsel, Zugvalidierung, Gewinn- und Remis-Erkennung und hat nur einen Guard-Test. | `play`-Tests mit deterministischen Stubs als Priorität 1. |
+| H4 | Hoch | §4 | Es sind keine Testentwurfsverfahren genannt, also weder Äquivalenzklassen noch Grenzwerte noch Entscheidungstabellen. Die Testfallauswahl ist dadurch nicht begründet. | Verfahren benennen und pro Testfall zuordnen. Beinahe-Linien sind z.B. der Grenzwert. |
+| M1 | Mittel | §1 | Die Scope-Begründung widerspricht sich. "Pure, deterministic logic" wird als Kriterium genannt, trotzdem sind `GreedyPlayer` und `toString` ausgeschlossen, obwohl beide deterministisch und trivial testbar sind. | Jeden Out-of-Scope-Punkt einzeln begründen oder in den Scope aufnehmen. |
+| M2 | Mittel | §4, §5 | Test 3 hängt von `GreedyPlayer` ab. Das widerspricht "independent of any concrete player implementation" in §1. | Lambda oder anonymen Stub verwenden. Der wird für die `play`-Tests ohnehin gebraucht. |
+| M3 | Mittel | §5 | Es gibt keine CIRCLE-Gewinnfälle. Die parametrisierten Tests laufen nur für eine Farbe. | `@MethodSource` auf das Kreuzprodukt Farbe × Linie erweitern (16 Fälle). |
+| M4 | Mittel | Struktur | Wesentliche Konzeptteile fehlen: Testebenen, Ein- und Ausstiegskriterien, Testumgebung, Ausführungszeitpunkt (lokal/CI) und der Umgang mit fehlschlagenden Tests. | Abschnitte ergänzen. |
+| M5 | Mittel | §7 | Die offenen Punkte waren nicht priorisiert, und die zentralen Lücken K2 und H1 fehlten dort ganz. | Liste nach Risiko sortieren und ergänzen. |
+| N1 | Niedrig | §3, §5 | Es gibt eine Inkonsistenz: Als Assertion-Library ist AssertJ angegeben, `dummyTest` nutzt aber `assertTrue`, und das stammt aus JUnit. `WithAssertions` hat kein `assertTrue`. | Einheitlich AssertJ verwenden, oder die Angabe korrigieren. |
+| N2 | Niedrig | §5 | `dummyTest` kann nie fehlschlagen und hat keinen Aussagewert. | Löschen. |
+| N3 | Niedrig | §2 | `Stone` fehlt bei den Testobjekten, obwohl es verwendet wird und `opponent()` in §7 vorkommt. Auch die Board-Repräsentation (Typ, Index-Layout 0–8 zeilenweise) ist nicht dokumentiert. | Ergänzen. |
+| N4 | Niedrig | §5 | Test 2 prüft zwei Farben in einer Methode, und Test 3 vergleicht die exakte Message. Das ist beides nicht falsch, aber nicht begründet. | Parametrisieren. Beim Message-Vergleich bewusst entscheiden und die Entscheidung dokumentieren. |
+
+### Massnahmen nach Reihenfolge
+
+1. K2, H1 und M3: `isWin`-Tests erweitern (Farbwechsel, Beinahe-Linien, CIRCLE)
+2. K1: JaCoCo einbinden und den echten Wert eintragen
+3. H3 und M2: `play`-Tests mit Stubs schreiben (Gewinn, Remis, ungültiger Zug → `IllegalStateException`)
+4. H2, H4 und M4: Testbasis, Verfahren und fehlende Konzeptabschnitte ergänzen
+5. Rest: redaktionelle Korrekturen
