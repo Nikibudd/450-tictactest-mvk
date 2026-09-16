@@ -1,8 +1,5 @@
 on:
   push:
-    branches:
-      - main
-      - develop
   pull_request:
     branches:
       - main
@@ -42,3 +39,42 @@ jobs:
 
       - name: Test
         run: ./gradlew test
+
+      - name: Upload JaCoCo execution data
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-exec-data
+          path: |
+            build/jacoco
+            build/classes
+          retention-days: 1
+  coverage:
+    needs: test
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download JaCoCo execution data
+        uses: actions/download-artifact@v4
+        with:
+          name: jacoco-exec-data
+          path: build
+
+      - name: Generate JaCoCo coverage report
+        run: ./gradlew jacocoTestReport -x test
+
+      - name: Upload JaCoCo coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: build/reports/jacoco/test/html
+          if-no-files-found: error
