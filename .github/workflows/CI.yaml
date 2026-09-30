@@ -78,3 +78,156 @@ jobs:
           name: jacoco-report
           path: build/reports/jacoco/test/html
           if-no-files-found: error
+
+      - name: Extract coverage summary
+        run: |
+          XML=build/reports/jacoco/test/jacocoTestReport.xml
+          LINE=$(grep -o '<counter type="LINE"[^/]*/>' "$XML" | tail -1)
+          BRANCH=$(grep -o '<counter type="BRANCH"[^/]*/>' "$XML" | tail -1)
+
+          LINE_COVERED=$(echo "$LINE" | grep -o 'covered="[0-9]*"' | grep -o '[0-9]*')
+          LINE_MISSED=$(echo "$LINE" | grep -o 'missed="[0-9]*"' | grep -o '[0-9]*')
+          BRANCH_COVERED=$(echo "$BRANCH" | grep -o 'covered="[0-9]*"' | grep -o '[0-9]*')
+          BRANCH_MISSED=$(echo "$BRANCH" | grep -o 'missed="[0-9]*"' | grep -o '[0-9]*')
+
+          LINE_COVERED=${LINE_COVERED:-0}
+          LINE_MISSED=${LINE_MISSED:-0}
+          BRANCH_COVERED=${BRANCH_COVERED:-0}
+          BRANCH_MISSED=${BRANCH_MISSED:-0}
+
+          LINE_PCT=$(awk -v c="$LINE_COVERED" -v m="$LINE_MISSED" 'BEGIN{t=c+m; printf "%.2f", (t>0 ? c/t*100 : 100)}')
+          BRANCH_PCT=$(awk -v c="$BRANCH_COVERED" -v m="$BRANCH_MISSED" 'BEGIN{t=c+m; printf "%.2f", (t>0 ? c/t*100 : 100)}')
+
+          mkdir -p build/coverage-summary
+          cat > build/coverage-summary/summary.env <<EOF
+          LINE_COVERED=$LINE_COVERED
+          LINE_MISSED=$LINE_MISSED
+          LINE_COVERAGE_PCT=$LINE_PCT
+          BRANCH_COVERED=$BRANCH_COVERED
+          BRANCH_MISSED=$BRANCH_MISSED
+          BRANCH_COVERAGE_PCT=$BRANCH_PCT
+          EOF
+          cat build/coverage-summary/summary.env
+
+      - name: Upload coverage summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary
+          path: build/coverage-summary/summary.env
+          retention-days: 1
+
+  coverage-check:
+    needs: coverage
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      THRESHOLD: "10"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download coverage summary
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-summary
+          path: coverage-summary
+
+      - name: Load coverage summary
+        run: cat coverage-summary/summary.env >> "$GITHUB_ENV"
+
+      - name: Fetch previous coverage from history
+        id: previous
+        run: |
+          PREV_LINE=""
+          if git ls-remote --exit-code --heads origin coverage-history >/dev/null 2>&1; then
+            git fetch origin coverage-history:refs/remotes/origin/coverage-history
+            LINES=$(git show origin/coverage-history:history.csv | wc -l)
+            if [ "$LINES" -gt 1 ]; then
+              PREV_LINE=$(git show origin/coverage-history:history.csv | tail -1 | cut -d',' -f5)
+            fi
+          fi
+          echo "prev_line_pct=${PREV_LINE}" >> "$GITHUB_OUTPUT"
+
+      - name: Evaluate coverage
+        id: eval
+        env:
+          PREV_LINE_PCT: ${{ steps.previous.outputs.prev_line_pct }}
+        run: |
+          PASS=true
+          REASON=""
+
+          if awk -v c="$LINE_COVERAGE_PCT" -v t="$THRESHOLD" 'BEGIN{exit !(c<t)}'; then
+            PASS=false
+            REASON="Line coverage ${LINE_COVERAGE_PCT}% liegt unter dem Minimum von ${THRESHOLD}%."
+          fi
+
+          if [ -n "$PREV_LINE_PCT" ] && awk -v c="$LINE_COVERAGE_PCT" -v p="$PREV_LINE_PCT" 'BEGIN{exit !(c<p)}'; then
+            PASS=false
+            REASON="${REASON} Line coverage ${LINE_COVERAGE_PCT}% ist tiefer als der letzte main-Stand (${PREV_LINE_PCT}%)."
+          fi
+
+          echo "pass=$PASS" >> "$GITHUB_OUTPUT"
+          echo "reason=$REASON" >> "$GITHUB_OUTPUT"
+
+      - name: Comment coverage on PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          header: coverage
+          message: |
+            ## Test Coverage
+
+            | Metric | Value |
+            |---|---|
+            | Line coverage | ${{ env.LINE_COVERAGE_PCT }}% (${{ env.LINE_COVERED }} / ${{ env.LINE_COVERED }}+${{ env.LINE_MISSED }} lines) |
+            | Branch coverage | ${{ env.BRANCH_COVERAGE_PCT }}% |
+            | Letzter main-Stand | ${{ steps.previous.outputs.prev_line_pct || 'n/a' }}% |
+            | Minimum | ${{ env.THRESHOLD }}% |
+            | Status | ${{ steps.eval.outputs.pass == 'true' && 'bestanden' || 'fehlgeschlagen' }} |
+
+            ${{ steps.eval.outputs.reason }}
+
+      - name: Fail if coverage check failed
+        if: steps.eval.outputs.pass != 'true'
+        run: |
+          echo "${{ steps.eval.outputs.reason }}"
+          exit 1
+
+  update-coverage-history:
+    needs: coverage
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download coverage summary
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-summary
+          path: coverage-summary
+
+      - name: Load coverage summary
+        run: cat coverage-summary/summary.env >> "$GITHUB_ENV"
+
+      - name: Append entry to coverage-history branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin coverage-history
+          git worktree add ../coverage-history-wt origin/coverage-history
+
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          SHA=${GITHUB_SHA:0:12}
+          echo "${DATE},${SHA},${LINE_COVERED},${LINE_MISSED},${LINE_COVERAGE_PCT},${BRANCH_COVERED},${BRANCH_MISSED},${BRANCH_COVERAGE_PCT}" >> ../coverage-history-wt/history.csv
+
+          cd ../coverage-history-wt
+          git checkout -B coverage-history
+          git add history.csv
+          git commit -m "coverage: main @ ${SHA} (${LINE_COVERAGE_PCT}% line)"
+          git push origin coverage-history
