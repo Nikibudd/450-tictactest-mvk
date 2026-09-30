@@ -1,0 +1,54 @@
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+
+jobs:
+  ci:
+    uses: ./.github/workflows/build-test-coverage.yaml
+    permissions:
+      contents: read
+      packages: read
+
+  update-coverage-history:
+    needs: ci
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download coverage summary
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-summary
+          path: coverage-summary
+
+      - name: Load coverage summary
+        run: cat coverage-summary/summary.env >> "$GITHUB_ENV"
+
+      - name: Append entry to coverage-history branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin coverage-history
+          git worktree add ../coverage-history-wt origin/coverage-history
+
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          SHA=${GITHUB_SHA:0:12}
+          echo "${DATE},${SHA},${LINE_COVERED},${LINE_MISSED},${LINE_COVERAGE_PCT},${BRANCH_COVERED},${BRANCH_MISSED},${BRANCH_COVERAGE_PCT}" >> ../coverage-history-wt/history.csv
+
+          cd ../coverage-history-wt
+          git checkout -B coverage-history
+          git add history.csv
+          git commit -m "coverage: main @ ${SHA} (${LINE_COVERAGE_PCT}% line)"
+          git push origin coverage-history
