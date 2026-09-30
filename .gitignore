@@ -1,5 +1,6 @@
 .*
 !.git*
+!.devcontainer
 
 build/
 !**/src/main/**/build/
@@ -10,6 +11,10 @@ src/generated/
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
+
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
 
 node_modules/
 
