@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:latest
+      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:412a8cef2b91
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -26,7 +26,7 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:latest
+      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:412a8cef2b91
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -52,7 +52,7 @@ jobs:
     needs: test
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:latest
+      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:412a8cef2b91
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

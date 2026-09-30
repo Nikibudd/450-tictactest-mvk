@@ -5,61 +5,68 @@ Entwicklungsumgebungen genutzt wird. Umgesetzt in `.github/workflows/devcontaine
 
 ## Versionierungskonzept
 
-Jedes Image wird mit dem **Commit-Hash** (kurz, 12 Zeichen) des Commits getaggt, der `.devcontainer/**`
-geändert hat, z.B. `ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:a1b2c3d4e5f6`.
+Jedes Image wird mit dem **Commit-Hash** (kurz, 12 Zeichen) des Commits getaggt, der
+`.devcontainer/Dockerfile` geändert hat, z.B.
+`ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:a1b2c3d4e5f6`.
 
 - Automatisch, eindeutig, kein manuelles Versionieren nötig.
 - Der Tag ist ein Audit-Trail: man sieht sofort, welcher Commit ein Image erzeugt hat.
-- `latest` ist kein Alias für "neuester Build", sondern für den **zuletzt offiziell freigegebenen** Build.
+- Es gibt **kein** bewegliches `latest`. `CI.yaml` und `devcontainer.json` referenzieren immer einen
+  konkreten, gepinnten Hash — reproduzierbar, kein "was ist gerade latest"-Rätsel.
 
 ## Ablauf
 
 ```
-Push auf main (.devcontainer/**)
+Push auf main (.devcontainer/Dockerfile geändert)
         │
         ▼
-┌───────────────────┐
-│ build-and-push     │  baut Image, pusht nach ghcr.io mit Tag <commit-sha>
-└─────────┬──────────┘
+┌────────────────────┐
+│ build-and-push      │  baut Image, pusht nach ghcr.io mit Tag <commit-sha>
+└─────────┬───────────┘
           │
           ▼
-┌───────────────────┐
-│ release             │  wartet auf Freigabe (GitHub Environment "devcontainer-release",
-│ (environment gate)  │  required reviewers) → retaggt <commit-sha> als "latest"
-└─────────┬──────────┘
+┌────────────────────┐
+│ open-release-pr     │  ersetzt den Image-Tag in CI.yaml + devcontainer.json
+└─────────┬───────────┘  durch <commit-sha>, öffnet PR
           │
           ▼
-┌───────────────────┐
-│ open-release-pr    │  öffnet automatisch einen PR, der .devcontainer/RELEASED_VERSION
-└────────────────────┘  aktualisiert (Nachvollziehbarkeit, kein weiteres Gate)
+   Review & Merge      ←── DAS ist die Freigabe
+          │
+          ▼
+   CI & lokale DevContainer nutzen automatisch <commit-sha>
 ```
 
-Bei Pull Requests, die `.devcontainer/**` ändern, läuft nur `build-and-push` **ohne Push** (reine
-Build-Validierung) — Images werden ausschliesslich von `main` aus veröffentlicht.
+Bei Pull Requests, die `.devcontainer/Dockerfile` ändern, läuft nur `build-and-push` **ohne Push**
+(reine Build-Validierung) — Images werden ausschliesslich von `main` aus veröffentlicht.
+
+Der Trigger reagiert bewusst nur auf `.devcontainer/Dockerfile`, nicht auf das ganze
+`.devcontainer/`-Verzeichnis: Nur Änderungen am Dockerfile verändern das Image tatsächlich. Der
+Release-PR selbst ändert nur `CI.yaml` und `devcontainer.json` (Referenzen), nie das Dockerfile —
+sein Merge löst also keinen erneuten Build aus. Frühere Version hatte hier einen Bug: ein separates
+`RELEASED_VERSION`-Audit-File lag unter `.devcontainer/**` und löste beim Mergen des Release-PRs
+einen Loop aus (Build → Freigabe → neuer Release-PR → Merge → Build → ...). Diese Datei wurde
+entfernt.
 
 ## Freigabeprozess
 
-Der `release`-Job läuft im GitHub **Environment** `devcontainer-release`. Damit ein Image tatsächlich
-zu `latest` wird, muss dieses Environment im Repository unter
-**Settings → Environments → devcontainer-release → Required reviewers** mit mindestens einer
-freigabeberechtigten Person konfiguriert sein. Ohne diese manuelle Konfiguration pausiert der Job nicht
-und jede Änderung würde ungeprüft durchlaufen — die Konfiguration ist also Voraussetzung, nicht optional.
-
-Solange kein Reviewer freigegeben hat, bleibt `latest` unverändert und zeigt weiterhin auf den zuletzt
-freigegebenen Stand. Ungeprüfte Images existieren zwar in der Registry (unter ihrem Commit-Hash-Tag),
-werden aber von keinem CI-Job oder lokaler Umgebung automatisch verwendet, da diese ausschliesslich
-`:latest` referenzieren.
+Es gibt kein GitHub Environment und kein manuelles Approval-Gate mehr. **Der Review und Merge des
+automatisch erstellten Release-PRs ist die Freigabe.** Solange der PR offen ist, laufen CI-Jobs und
+lokale DevContainer weiterhin mit dem zuletzt gemergten (freigegebenen) Hash — das neue, ungeprüfte
+Image existiert zwar bereits in der Registry, wird aber von nichts automatisch verwendet, bis jemand
+den PR reviewt und mergt.
 
 ## Nutzung durch CI und lokale Umgebung
 
-- **CI (`CI.yaml`)**: alle Jobs referenzieren `ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:latest`
-  und erhalten damit automatisch den zuletzt freigegebenen Stand.
-- **Lokal (`devcontainer.json`)**: `"image": "ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:latest"`
-  — beim Neu-Öffnen des DevContainers wird automatisch dasselbe freigegebene Image gezogen, kein lokaler
-  Build aus dem `Dockerfile` mehr.
+- **CI (`CI.yaml`)**: alle drei Jobs (`build`, `test`, `coverage`) referenzieren
+  `ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:<commit-sha>` — der jeweils zuletzt freigegebene
+  Stand.
+- **Lokal (`devcontainer.json`)**: `"image": "ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:<commit-sha>"`
+  — beim Neu-Öffnen des DevContainers wird automatisch derselbe freigegebene Stand gezogen, kein
+  lokaler Build aus dem `Dockerfile` mehr.
+- Beide Stellen werden vom Release-PR gemeinsam aktualisiert, sodass CI und lokale Umgebung nie
+  auseinanderlaufen.
 
 ## Voraussetzungen (einmalige manuelle Einrichtung)
 
-1. Environment `devcontainer-release` mit Required Reviewers anlegen (siehe oben).
-2. Repository-Settings → Actions → General → **"Allow GitHub Actions to create and approve pull
-   requests"** aktivieren, sonst schlägt der `open-release-pr`-Job fehl.
+Repository-Settings → Actions → General → **"Allow GitHub Actions to create and approve pull
+requests"** aktivieren, sonst schlägt der `open-release-pr`-Job fehl.

@@ -1,6 +1,6 @@
 {
 	"name": "tictactoe (Alpine, Java 25)",
-	"image": "ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:latest",
+	"image": "ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:412a8cef2b91",
 	"remoteUser": "dev",
 	"mounts": [
 		"source=${localEnv:HOME}/.ssh,target=/home/dev/.ssh,type=bind,readonly",
