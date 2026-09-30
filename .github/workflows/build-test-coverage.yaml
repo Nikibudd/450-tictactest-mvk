@@ -1,0 +1,115 @@
+on:
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:412a8cef2b91
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: ./gradlew build -x test
+
+  test:
+    needs: build
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:412a8cef2b91
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test
+        run: ./gradlew test
+
+      - name: Upload JaCoCo execution data
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-exec-data
+          path: |
+            build/jacoco
+            build/classes
+          retention-days: 1
+
+  coverage:
+    needs: test
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:412a8cef2b91
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download JaCoCo execution data
+        uses: actions/download-artifact@v4
+        with:
+          name: jacoco-exec-data
+          path: build
+
+      - name: Generate JaCoCo coverage report
+        run: ./gradlew jacocoTestReport -x test
+
+      - name: Upload JaCoCo coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: build/reports/jacoco/test/html
+          if-no-files-found: error
+
+      - name: Extract coverage summary
+        run: |
+          XML=build/reports/jacoco/test/jacocoTestReport.xml
+          LINE=$(grep -o '<counter type="LINE"[^/]*/>' "$XML" | tail -1)
+          BRANCH=$(grep -o '<counter type="BRANCH"[^/]*/>' "$XML" | tail -1)
+
+          LINE_COVERED=$(echo "$LINE" | grep -o 'covered="[0-9]*"' | grep -o '[0-9]*')
+          LINE_MISSED=$(echo "$LINE" | grep -o 'missed="[0-9]*"' | grep -o '[0-9]*')
+          BRANCH_COVERED=$(echo "$BRANCH" | grep -o 'covered="[0-9]*"' | grep -o '[0-9]*')
+          BRANCH_MISSED=$(echo "$BRANCH" | grep -o 'missed="[0-9]*"' | grep -o '[0-9]*')
+
+          LINE_COVERED=${LINE_COVERED:-0}
+          LINE_MISSED=${LINE_MISSED:-0}
+          BRANCH_COVERED=${BRANCH_COVERED:-0}
+          BRANCH_MISSED=${BRANCH_MISSED:-0}
+
+          LINE_PCT=$(awk -v c="$LINE_COVERED" -v m="$LINE_MISSED" 'BEGIN{t=c+m; printf "%.2f", (t>0 ? c/t*100 : 100)}')
+          BRANCH_PCT=$(awk -v c="$BRANCH_COVERED" -v m="$BRANCH_MISSED" 'BEGIN{t=c+m; printf "%.2f", (t>0 ? c/t*100 : 100)}')
+
+          mkdir -p build/coverage-summary
+          cat > build/coverage-summary/summary.env <<EOF
+          LINE_COVERED=$LINE_COVERED
+          LINE_MISSED=$LINE_MISSED
+          LINE_COVERAGE_PCT=$LINE_PCT
+          BRANCH_COVERED=$BRANCH_COVERED
+          BRANCH_MISSED=$BRANCH_MISSED
+          BRANCH_COVERAGE_PCT=$BRANCH_PCT
+          EOF
+          cat build/coverage-summary/summary.env
+
+      - name: Upload coverage summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary
+          path: build/coverage-summary/summary.env
+          retention-days: 1

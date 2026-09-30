@@ -56,7 +56,7 @@ jobs:
       - name: Bump image tag references
         run: |
           sed -i -E "s#(ghcr\.io/nikibudd/450-tictactest-mvk-devcontainer):[A-Za-z0-9_.-]+#\1:${{ needs.build-and-push.outputs.sha_tag }}#g" \
-            .github/workflows/CI.yaml \
+            .github/workflows/build-test-coverage.yaml \
             .devcontainer/devcontainer.json
 
       - name: Open release PR
