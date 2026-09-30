@@ -1,6 +1,6 @@
 {
 	"name": "tictactoe (Alpine, Java 25)",
-	"build": { "dockerfile": "Dockerfile" },
+	"image": "ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:latest",
 	"remoteUser": "dev",
 	"mounts": [
 		"source=${localEnv:HOME}/.ssh,target=/home/dev/.ssh,type=bind,readonly",
