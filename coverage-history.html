@@ -1,0 +1,533 @@
+<title>history.csv</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#08060d;
+    --panel:#130f1f;
+    --panel-2:#0d0a17;
+    --border:#3d2f61;
+    --border-dim:#211a38;
+    --fg:#d6c6ff;
+    --fg-dim:#8577b3;
+    --fg-faint:#4c4270;
+    --accent2:#ff8fd1;
+    --accent2-dim:#8a4f74;
+    --bad:#ff6b6b;
+    --good:#7cc3ff;
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:'JetBrains Mono','Fira Code',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    padding:16px;
+    padding-block:24px;
+    display:flex;
+    justify-content:center;
+    position:relative;
+  }
+
+  /* scanline overlay */
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,0.12) 3px
+    );
+    mix-blend-mode:multiply;
+    z-index:50;
+    animation:flicker 6s infinite steps(1);
+  }
+  @media (prefers-reduced-motion: reduce){
+    body::before{ animation:none; }
+  }
+  @keyframes flicker{
+    0%,96%,100%{ opacity:1; }
+    97%{ opacity:0.94; }
+    98%{ opacity:1; }
+  }
+
+  .term{
+    width:100%;
+    max-width:900px;
+  }
+
+  /* --- window chrome --- */
+  .chrome{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-bottom:none;
+    border-radius:6px 6px 0 0;
+    padding:8px 12px;
+  }
+  .dot{
+    width:10px;height:10px;border-radius:50%;
+    background:var(--fg-faint);
+    border:1px solid var(--border);
+  }
+  .chrome .path{
+    margin-left:8px;
+    color:var(--fg-dim);
+    font-size:12px;
+    overflow-x:auto;
+    white-space:nowrap;
+  }
+
+  .screen{
+    border:1px solid var(--border);
+    background:var(--panel);
+    padding:20px clamp(14px,4vw,28px);
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+  }
+
+  /* --- banner --- */
+  pre.banner{
+    margin:0;
+    color:var(--fg);
+    font-size:clamp(9px,2.6vw,13px);
+    line-height:1.25;
+    text-shadow:0 0 6px rgba(214,198,255,0.25);
+    overflow-x:auto;
+  }
+  .subtitle{
+    margin-top:-8px;
+    color:var(--fg-dim);
+    font-size:12px;
+    letter-spacing:0.06em;
+  }
+  .subtitle .warn{ color:var(--accent2); }
+
+  /* --- stat row --- */
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:1px;
+    background:var(--border-dim);
+    border:1px solid var(--border-dim);
+  }
+  .stat{
+    background:var(--panel-2);
+    padding:10px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .stat .label{
+    font-size:10px;
+    letter-spacing:0.1em;
+    color:var(--fg-faint);
+    text-transform:uppercase;
+  }
+  .stat .value{
+    font-size:20px;
+    font-variant-numeric:tabular-nums;
+    color:var(--fg);
+  }
+  .stat .value.good{ color:var(--good); }
+  .stat .value.bad{ color:var(--bad); }
+  .stat .value .delta{
+    font-size:12px;
+    margin-left:6px;
+  }
+  .delta.up{ color:var(--good); }
+  .delta.down{ color:var(--bad); }
+
+  /* --- panel with title bar, reused for chart + table --- */
+  .box{
+    border:1px solid var(--border);
+  }
+  .box .bar{
+    background:var(--panel-2);
+    border-bottom:1px solid var(--border);
+    padding:6px 12px;
+    font-size:11px;
+    color:var(--fg-dim);
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .box .bar .legend{
+    display:flex;
+    gap:14px;
+  }
+  .box .bar .legend span{ white-space:nowrap; }
+  .box .body{
+    padding:12px;
+  }
+
+  svg.chart{
+    width:100%;
+    height:auto;
+    display:block;
+    overflow:visible;
+  }
+  .chart text{
+    font-family:inherit;
+    font-size:9.5px;
+    fill:var(--fg-faint);
+  }
+  .chart .grid{ stroke:var(--border-dim); stroke-width:1; }
+  .chart .threshold{ stroke:var(--bad); stroke-width:1; stroke-dasharray:3 3; opacity:0.7; }
+  .chart .line-series{ fill:none; stroke:var(--fg); stroke-width:2; }
+  .chart .branch-series{ fill:none; stroke:var(--accent2); stroke-width:1.6; stroke-dasharray:5 3; }
+  .chart .dot-line{ fill:var(--panel); stroke:var(--fg); stroke-width:1.6; }
+  .chart .dot-branch{ fill:var(--panel); stroke:var(--accent2); stroke-width:1.6; }
+  .chart .end-label{ font-size:10.5px; font-weight:600; }
+
+  /* --- table --- */
+  .table-wrap{ overflow-x:auto; }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12px;
+    min-width:640px;
+  }
+  thead th{
+    text-align:left;
+    font-size:10px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--fg-faint);
+    padding:6px 10px;
+    border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  tbody td{
+    padding:5px 10px;
+    border-bottom:1px solid var(--border-dim);
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+  }
+  tbody tr:hover td{ background:rgba(214,198,255,0.05); }
+  tbody tr:last-child td{ border-bottom:none; }
+  .hash{
+    color:var(--fg-dim);
+    background:var(--panel-2);
+    border:1px solid var(--border-dim);
+    border-radius:3px;
+    padding:1px 5px;
+    font-size:11px;
+  }
+  .pct.good{ color:var(--good); }
+  .pct.bad{ color:var(--bad); }
+  .arrow.up{ color:var(--good); }
+  .arrow.down{ color:var(--bad); }
+  .arrow.flat{ color:var(--fg-faint); }
+
+  /* --- footer prompt --- */
+  .prompt{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    color:var(--fg-dim);
+    font-size:12px;
+    flex-wrap:wrap;
+  }
+  .prompt .user{ color:var(--accent2); }
+  .prompt .path2{ color:var(--fg); }
+  .cursor{
+    display:inline-block;
+    width:8px;height:14px;
+    background:var(--fg);
+    animation:blink 1s steps(1) infinite;
+  }
+  @media (prefers-reduced-motion: reduce){
+    .cursor{ animation:none; opacity:1; }
+  }
+  @keyframes blink{
+    0%,49%{ opacity:1; }
+    50%,100%{ opacity:0; }
+  }
+
+  .note{
+    color:var(--fg-faint);
+    font-size:11px;
+    margin-top:-6px;
+  }
+
+  @media (max-width:520px){
+    .stats{ grid-template-columns:repeat(2,1fr); }
+  }
+</style>
+
+<div class="term">
+  <div class="chrome">
+    <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    <div class="path">~/coverage-history/history.csv</div>
+  </div>
+
+  <div class="screen">
+    <pre class="banner" id="banner"></pre>
+    <div class="subtitle" id="subtitle">loading…</div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="box">
+      <div class="bar">
+        <span>$ plot --series line,branch --x commit --file history.csv</span>
+        <span class="legend">
+          <span style="color:var(--fg)">── line</span>
+          <span style="color:var(--accent2)">╌╌ branch</span>
+          <span style="color:var(--bad)">┄┄ min 10%</span>
+        </span>
+      </div>
+      <div class="body">
+        <svg class="chart" id="chart" viewBox="0 0 900 300" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="bar">
+        <span>$ tail -n 18 history.csv</span>
+        <span id="rowcount"></span>
+      </div>
+      <div class="body table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>date</th><th>commit</th>
+              <th>line</th><th>Δ</th>
+              <th>branch</th><th>Δ</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="prompt">
+      <span><span class="user">visitor</span>@coverage-history<span class="path2">:~$</span></span>
+      <span id="promptmsg">cat history.csv | render --theme tui</span>
+      <span class="cursor"></span>
+    </div>
+    <div class="note" id="datanote"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var FALLBACK_CSV = [
+    "date,commit,line_covered,line_missed,line_coverage_pct,branch_covered,branch_missed,branch_coverage_pct",
+    "2026-06-01T08:12:00Z,a1b2c3d4e5f6,12,88,12.00,6,44,12.00",
+    "2026-06-08T10:30:00Z,b2c3d4e5f607,20,95,17.39,10,50,16.67",
+    "2026-06-15T14:05:00Z,c3d4e5f60718,35,100,25.93,16,54,22.86",
+    "2026-06-22T09:47:00Z,d4e5f6071829,48,102,32.00,22,58,27.50",
+    "2026-06-29T16:20:00Z,e5f607182930,55,110,33.33,26,64,28.89",
+    "2026-07-06T11:11:00Z,f6071829304a,40,140,22.22,20,75,21.05",
+    "2026-07-13T13:55:00Z,071829304a5b,70,120,36.84,34,66,34.00",
+    "2026-07-20T08:40:00Z,1829304a5b6c,85,115,42.50,40,65,38.10",
+    "2026-07-27T15:02:00Z,29304a5b6c7d,95,115,45.24,45,65,40.91",
+    "2026-08-03T09:18:00Z,304a5b6c7d8e,108,112,49.09,50,65,43.48",
+    "2026-08-10T12:44:00Z,4a5b6c7d8e9f,115,115,50.00,54,66,45.00",
+    "2026-08-17T10:26:00Z,5b6c7d8e9fa0,122,118,50.83,57,68,45.60",
+    "2026-08-24T14:33:00Z,6c7d8e9fa0b1,130,120,52.00,60,70,46.15",
+    "2026-08-31T09:05:00Z,7d8e9fa0b1c2,140,118,54.26,64,71,47.41",
+    "2026-09-07T11:50:00Z,8e9fa0b1c2d3,150,115,56.60,68,72,48.57",
+    "2026-09-14T16:15:00Z,9fa0b1c2d3e4,158,112,58.52,72,73,49.66",
+    "2026-09-21T10:02:00Z,a0b1c2d3e4f5,165,110,60.00,75,75,50.00",
+    "2026-09-28T13:29:00Z,b1c2d3e4f5a6,172,108,61.43,79,76,50.97"
+  ].join("\n");
+
+  var THRESHOLD = 10;
+
+  function parseCSV(text){
+    var lines = text.trim().split(/\r?\n/);
+    var header = lines[0].split(",");
+    return lines.slice(1).filter(function(l){ return l.trim().length; }).map(function(line){
+      var cols = line.split(",");
+      var row = {};
+      header.forEach(function(h,i){ row[h.trim()] = cols[i]; });
+      row.line_coverage_pct = parseFloat(row.line_coverage_pct);
+      row.branch_coverage_pct = parseFloat(row.branch_coverage_pct);
+      row.line_covered = parseInt(row.line_covered,10);
+      row.line_missed = parseInt(row.line_missed,10);
+      row.branch_covered = parseInt(row.branch_covered,10);
+      row.branch_missed = parseInt(row.branch_missed,10);
+      return row;
+    });
+  }
+
+  function fmtDate(iso){
+    var d = new Date(iso);
+    if (isNaN(d)) return iso;
+    var mm = String(d.getUTCMonth()+1).padStart(2,"0");
+    var dd = String(d.getUTCDate()).padStart(2,"0");
+    return d.getUTCFullYear()+"-"+mm+"-"+dd;
+  }
+
+  function svgEl(tag, attrs){
+    var el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (var k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  function renderBanner(){
+    document.getElementById("banner").textContent =
+"┌─────────────────────────────────────────────────┐\n" +
+"│ C O V E R A G E   H I S T O R Y                 │\n" +
+"│ 450-tictactest-mvk · branch: coverage-history   │\n" +
+"└─────────────────────────────────────────────────┘";
+  }
+
+  function renderStats(rows){
+    var latest = rows[rows.length-1];
+    var first = rows[0];
+    var lineDelta = latest.line_coverage_pct - first.line_coverage_pct;
+    var el = document.getElementById("stats");
+    el.innerHTML = "";
+
+    function stat(label, value, cls, delta){
+      var wrap = document.createElement("div");
+      wrap.className = "stat";
+      var l = document.createElement("div");
+      l.className = "label"; l.textContent = label;
+      var v = document.createElement("div");
+      v.className = "value" + (cls ? " "+cls : "");
+      v.textContent = value;
+      if (delta !== undefined){
+        var d = document.createElement("span");
+        d.className = "delta " + (delta >= 0 ? "up" : "down");
+        d.textContent = (delta >= 0 ? "▲ +" : "▼ ") + delta.toFixed(2) + "pp";
+        v.appendChild(d);
+      }
+      wrap.appendChild(l); wrap.appendChild(v);
+      el.appendChild(wrap);
+    }
+
+    stat("line coverage", latest.line_coverage_pct.toFixed(2)+"%",
+      latest.line_coverage_pct >= THRESHOLD ? "good" : "bad", lineDelta);
+    stat("branch coverage", latest.branch_coverage_pct.toFixed(2)+"%");
+    stat("threshold", THRESHOLD.toFixed(0)+"%");
+    stat("entries", String(rows.length));
+    stat("range", fmtDate(first.date)+" → "+fmtDate(latest.date));
+    stat("head", latest.commit.slice(0,12));
+  }
+
+  function renderChart(rows){
+    var svg = document.getElementById("chart");
+    svg.innerHTML = "";
+    var W = 900, H = 300;
+    var padL = 34, padR = 20, padT = 16, padB = 26;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+
+    function x(i){ return padL + (rows.length === 1 ? plotW/2 : i/(rows.length-1) * plotW); }
+    function y(v){ return padT + plotH - (v/100) * plotH; }
+
+    // grid + y labels
+    [0,25,50,75,100].forEach(function(v){
+      svg.appendChild(svgEl("line", {class:"grid", x1:padL, x2:W-padR, y1:y(v), y2:y(v)}));
+      var t = svgEl("text", {x:padL-8, y:y(v)+3, "text-anchor":"end"});
+      t.textContent = v+"%";
+      svg.appendChild(t);
+    });
+
+    // threshold line
+    svg.appendChild(svgEl("line", {class:"threshold", x1:padL, x2:W-padR, y1:y(THRESHOLD), y2:y(THRESHOLD)}));
+
+    // x labels (every ~3rd entry)
+    var step = Math.ceil(rows.length / 6);
+    rows.forEach(function(r,i){
+      if (i % step === 0 || i === rows.length-1){
+        var t = svgEl("text", {x:x(i), y:H-6, "text-anchor":"middle"});
+        t.textContent = fmtDate(r.date).slice(5);
+        svg.appendChild(t);
+      }
+    });
+
+    function path(key){
+      return rows.map(function(r,i){ return (i===0?"M":"L")+x(i).toFixed(1)+","+y(r[key]).toFixed(1); }).join(" ");
+    }
+
+    svg.appendChild(svgEl("path", {class:"branch-series", d:path("branch_coverage_pct")}));
+    svg.appendChild(svgEl("path", {class:"line-series", d:path("line_coverage_pct")}));
+
+    rows.forEach(function(r,i){
+      svg.appendChild(svgEl("circle", {class:"dot-branch", cx:x(i), cy:y(r.branch_coverage_pct), r:2.5}));
+      svg.appendChild(svgEl("circle", {class:"dot-line", cx:x(i), cy:y(r.line_coverage_pct), r:2.5}));
+    });
+
+    var last = rows[rows.length-1];
+    var lx = x(rows.length-1), ly = y(last.line_coverage_pct), by = y(last.branch_coverage_pct);
+    var lt = svgEl("text", {class:"end-label", x:Math.min(lx+8,W-padR-2), y:ly-6, fill:"var(--fg)"});
+    lt.textContent = last.line_coverage_pct.toFixed(1)+"%";
+    svg.appendChild(lt);
+    var bt = svgEl("text", {class:"end-label", x:Math.min(lx+8,W-padR-2), y:by+12, fill:"var(--accent2)"});
+    bt.textContent = last.branch_coverage_pct.toFixed(1)+"%";
+    svg.appendChild(bt);
+  }
+
+  function renderTable(rows){
+    var tbody = document.getElementById("tbody");
+    tbody.innerHTML = "";
+    var display = rows.slice().reverse();
+    display.forEach(function(r,idx){
+      var prev = display[idx+1];
+      var tr = document.createElement("tr");
+
+      function td(html, cls){
+        var el = document.createElement("td");
+        if (cls) el.className = cls;
+        el.innerHTML = html;
+        return el;
+      }
+      function arrow(cur, prevVal){
+        if (prevVal === undefined) return '<span class="arrow flat">·</span>';
+        var d = cur - prevVal;
+        if (Math.abs(d) < 0.005) return '<span class="arrow flat">·</span>';
+        var cls = d > 0 ? "up" : "down";
+        var sym = d > 0 ? "▲" : "▼";
+        return '<span class="arrow '+cls+'">'+sym+' '+Math.abs(d).toFixed(2)+'</span>';
+      }
+
+      tr.appendChild(td(fmtDate(r.date)));
+      tr.appendChild(td('<span class="hash">'+r.commit.slice(0,12)+'</span>'));
+      tr.appendChild(td(
+        '<span class="pct '+(r.line_coverage_pct>=THRESHOLD?"good":"bad")+'">'+r.line_coverage_pct.toFixed(2)+'%</span>'
+      ));
+      tr.appendChild(td(arrow(r.line_coverage_pct, prev && prev.line_coverage_pct)));
+      tr.appendChild(td('<span class="pct">'+r.branch_coverage_pct.toFixed(2)+'%</span>'));
+      tr.appendChild(td(arrow(r.branch_coverage_pct, prev && prev.branch_coverage_pct)));
+      tbody.appendChild(tr);
+    });
+    document.getElementById("rowcount").textContent = rows.length+" entries";
+  }
+
+  function boot(rows, source){
+    renderBanner();
+    document.getElementById("subtitle").innerHTML =
+      rows.length + " commits tracked" +
+      (source === "sample" ? ' · <span class="warn">showing bundled sample data (history.csv not reachable)</span>' : " · source: history.csv");
+    renderStats(rows);
+    renderChart(rows);
+    renderTable(rows);
+    document.getElementById("datanote").textContent =
+      "data: history.csv, appended by update-coverage-history on every push to main · auto-published via GitHub Pages";
+  }
+
+  fetch("history.csv", {cache:"no-store"})
+    .then(function(res){ if (!res.ok) throw new Error("http "+res.status); return res.text(); })
+    .then(function(text){
+      if (!text || !text.trim()) throw new Error("empty");
+      boot(parseCSV(text), "live");
+    })
+    .catch(function(){
+      boot(parseCSV(FALLBACK_CSV), "sample");
+    });
+})();
+</script>
