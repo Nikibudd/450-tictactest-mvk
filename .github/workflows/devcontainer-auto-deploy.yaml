@@ -1,10 +1,10 @@
 on:
   push:
     paths:
-      - '.devcontainer/**'
+      - '.devcontainer/Dockerfile'
   pull_request:
     paths:
-      - '.devcontainer/**'
+      - '.devcontainer/Dockerfile'
 
 jobs:
   build-and-push:
@@ -43,32 +43,9 @@ jobs:
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:${{ steps.meta.outputs.sha_tag }}
 
-  release:
+  open-release-pr:
     needs: build-and-push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    environment: devcontainer-release
-    permissions:
-      packages: write
-    steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Promote reviewed image to latest
-        run: |
-          docker buildx imagetools create \
-            -t ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:latest \
-            ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:${{ needs.build-and-push.outputs.sha_tag }}
-
-  open-release-pr:
-    needs: [build-and-push, release]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -76,25 +53,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Record released version
+      - name: Bump image tag references
         run: |
-          {
-            echo "image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:${{ needs.build-and-push.outputs.sha_tag }}"
-            echo "released_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "commit: ${{ github.sha }}"
-          } > .devcontainer/RELEASED_VERSION
+          sed -i -E "s#(ghcr\.io/nikibudd/450-tictactest-mvk-devcontainer):[A-Za-z0-9_.-]+#\1:${{ needs.build-and-push.outputs.sha_tag }}#g" \
+            .github/workflows/CI.yaml \
+            .devcontainer/devcontainer.json
 
-      - name: Open documentation PR
+      - name: Open release PR
         uses: peter-evans/create-pull-request@v7
         with:
-          commit-message: "docs: devcontainer release ${{ needs.build-and-push.outputs.sha_tag }}"
-          title: "Devcontainer release ${{ needs.build-and-push.outputs.sha_tag }}"
+          commit-message: "release: devcontainer image ${{ needs.build-and-push.outputs.sha_tag }}"
+          title: "Release DevContainer image ${{ needs.build-and-push.outputs.sha_tag }}"
           body: |
-            Automatisch erstellt nach erfolgreicher Freigabe.
-
-            `latest` zeigt jetzt auf `ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:${{ needs.build-and-push.outputs.sha_tag }}`
+            Neues DevContainer-Image wurde gebaut und nach GHCR gepusht:
+            `ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:${{ needs.build-and-push.outputs.sha_tag }}`
             (Commit ${{ github.sha }}).
 
-            Dieser PR aktualisiert nur die Audit-Datei `.devcontainer/RELEASED_VERSION` und dient der Nachvollziehbarkeit.
+            **Mergen dieses PRs ist die Freigabe** — danach nutzen CI und lokale DevContainer
+            automatisch dieses Image.
           branch: devcontainer-release/${{ needs.build-and-push.outputs.sha_tag }}
-          add-paths: .devcontainer/RELEASED_VERSION
