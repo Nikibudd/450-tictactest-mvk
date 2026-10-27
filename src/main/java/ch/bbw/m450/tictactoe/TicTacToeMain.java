@@ -9,9 +9,14 @@ import ch.bbw.m450.tictactoe.players.HumanPlayer;
 /**
  * A small tic-tac-toe board. Initially with a human and a primitive but valid computer player.
  */
+@SuppressWarnings("java:S106") // a console game: stdout is the user interface, not logging
 public class TicTacToeMain {
 
 	public static final int BOARD_SIZE = 9;
+
+	private TicTacToeMain() {
+		// static utility, not meant to be instantiated
+	}
 
 	public static void main(String[] args) {
 		play(new HumanPlayer(), new GreedyPlayer());
@@ -66,7 +71,7 @@ public class TicTacToeMain {
 		//     3 | 4 | 5
 		//    ---+---+---
 		//     6 | 7 | 8
-		if(xPlayer == oPlayer) {
+		if (xPlayer == oPlayer) {
 			throw new IllegalArgumentException("players must differ");
 		}
 		var board = new Stone[BOARD_SIZE]; // all null -> empty
@@ -76,7 +81,7 @@ public class TicTacToeMain {
 			// we copy to avoid side effects by the player (not needed if they behave)
 			var clone = Arrays.copyOf(board, board.length);
 			var playTo = currentPlayer.play(clone, currentColor);
-			if (playTo < 0 || playTo >= 9 || board[playTo] != null) {
+			if (playTo < 0 || playTo >= BOARD_SIZE || board[playTo] != null) {
 				System.out.println(toString(board));
 				throw new IllegalStateException("cannot play to position " + playTo);
 			}
