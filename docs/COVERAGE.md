@@ -42,8 +42,12 @@ Doku- oder Workflow-Änderungs-Merge auf `main` löst keinen weiteren Build/Test
 
 ## Regeln
 
-- **Minimum**: Line Coverage muss ≥ 10 % sein (`THRESHOLD` in `CI.yaml`, aktuell bewusst niedrig
-  angesetzt, da die Testsuite noch am Anfang steht — kann später erhöht werden).
+- **Branch Coverage ≥ 90 %** (JaCoCo Test Coverage Verification): in `build.gradle` als
+  `jacocoTestCoverageVerification` mit Regel `BRANCH` / `COVEREDRATIO` / `0.90` konfiguriert und an
+  `check` gehängt. Läuft lokal mit `./gradlew check` und in CI im Job `test` (`ci / test`, required
+  check) — eine Unterschreitung lässt den Build fehlschlagen.
+- **Minimum**: Line Coverage muss ≥ 90 % sein (`THRESHOLD` in `CI.yaml`; ursprünglich 10 %, als die
+  Testsuite noch am Anfang stand, mit der vollständigen Testsuite auf 90 % angehoben).
 - **Keine Regression**: Line Coverage eines PRs darf nicht tiefer sein als der zuletzt auf `main`
   gemessene Stand.
 - Beide Prüfungen laufen im Job `coverage-check`, der als **required status check** für `main`

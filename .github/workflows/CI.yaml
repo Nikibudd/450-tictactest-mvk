@@ -22,7 +22,7 @@ jobs:
       contents: read
       pull-requests: write
     env:
-      THRESHOLD: "10"
+      THRESHOLD: "90"
     steps:
       - uses: actions/checkout@v4
 
