@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'application'
 	id 'jacoco'
+	id 'info.solidsoft.pitest' version '1.19.0'
 }
 
 dependencies {
@@ -52,6 +53,16 @@ jacocoTestCoverageVerification {
 
 check {
 	dependsOn jacocoTestCoverageVerification
+}
+
+pitest {
+	pitestVersion = '1.30.1'
+	junit5PluginVersion = '1.2.3'
+	targetClasses = ['ch.bbw.m450.tictactoe.*']
+	threads = 4
+	outputFormats = ['HTML', 'XML']
+	timestampedReports = false
+	mutationThreshold = 90
 }
 
 run {
