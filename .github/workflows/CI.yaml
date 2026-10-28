@@ -1,5 +1,5 @@
 on:
-  # every commit on every branch; main is covered by coverage-history.yaml
+  # every commit on every branch; main is covered by main.yaml
   push:
     branches-ignore:
       - main

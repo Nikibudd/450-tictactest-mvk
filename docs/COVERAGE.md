@@ -11,10 +11,11 @@ nachverfolgt wird. Umgesetzt über drei Workflow-Dateien:
   `main`) und bei Pull Requests: ruft
   `build-test-coverage.yaml` auf, danach prüft `coverage-check` Minimum & Regression und kommentiert
   den PR.
-- `.github/workflows/coverage-history.yaml` — läuft **nur bei Push auf `main`**, und nur wenn sich
+- `.github/workflows/main.yaml` — läuft **nur bei Push auf `main`**, und nur wenn sich
   Code/Tests tatsächlich geändert haben (Pfadfilter auf `src/**`, `build.gradle`, `gradlew` etc.).
   Ruft ebenfalls `build-test-coverage.yaml` auf, danach hängt `update-coverage-history` den Stand an
-  `history.csv` im Branch `coverage-history` an.
+  `history.csv` im Branch `coverage-history` an und `release` erstellt ein GitHub Release mit dem
+  Jar (siehe [`RELEASE.md`](RELEASE.md)).
 
 ## Ablauf
 
@@ -54,6 +55,7 @@ hochgeladen.
 | `cucumber-report` | Cucumber HTML-Report | `test` |
 | `jacoco-report` | JaCoCo HTML + XML | `coverage` |
 | `pitest-report` | PIT Mutation-Report HTML + XML | `mutation` |
+| `tictactoe-jar` | lauffähiges Jar (`java -jar`), Version = Commit-Hash | `build` |
 | `coverage-summary` | Kennzahlen für `coverage-check` (intern, 1 Tag) | `coverage` |
 | `jacoco-exec-data` | JaCoCo Rohdaten (intern, 1 Tag) | `test` |
 
