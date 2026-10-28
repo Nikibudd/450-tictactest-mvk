@@ -1,5 +1,7 @@
 package ch.bbw.m450.tictactoe;
 
+import static ch.bbw.m450.tictactoe.Boards.board;
+
 import org.assertj.core.api.WithAssertions;
 import org.junit.jupiter.api.Test;
 import org.junitpioneer.jupiter.StdIo;
@@ -39,6 +41,16 @@ class TicTacToeConsoleTest implements WithAssertions {
 				.isThrownBy(() -> TicTacToeMain.main(NO_ARGS))
 				.withMessage("cannot play to position 9");
 		assertThat(out.capturedString()).contains("where to to put the next CROSS? (0-8): ");
+	}
+
+	@Test
+	@StdIo
+	void given_invalidMove_when_playIsCalled_then_printsBoardBeforeFailing(StdOut out) {
+		var xPlayer = ScriptedPlayer.playing(0);
+		var oPlayer = ScriptedPlayer.playing(0);
+
+		assertThatIllegalStateException().isThrownBy(() -> TicTacToeMain.play(xPlayer, oPlayer));
+		assertThat(out.capturedString()).startsWith(TicTacToeMain.toString(board("X..", "...", "...")));
 	}
 
 	@Test

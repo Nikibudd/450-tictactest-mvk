@@ -46,6 +46,32 @@ jobs:
             build/classes
           retention-days: 1
 
+  mutation:
+    needs: build
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:412a8cef2b91
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mutation testing with PIT (mutation score >= 90 %)
+        run: ./gradlew pitest
+
+      - name: Upload PIT mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pitest-report
+          path: build/reports/pitest
+          if-no-files-found: warn
+
   coverage:
     needs: test
     runs-on: ubuntu-24.04
