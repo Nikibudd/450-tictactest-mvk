@@ -1,7 +1,8 @@
 on:
+  # every commit on every branch; main is covered by coverage-history.yaml
   push:
-    branches:
-      - develop
+    branches-ignore:
+      - main
   pull_request:
     branches:
       - main
@@ -22,7 +23,7 @@ jobs:
       contents: read
       pull-requests: write
     env:
-      THRESHOLD: "10"
+      THRESHOLD: "90"
     steps:
       - uses: actions/checkout@v4
 

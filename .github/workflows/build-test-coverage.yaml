@@ -34,8 +34,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Test
-        run: ./gradlew test
+      - name: Test and verify coverage (branch coverage >= 90 %)
+        run: ./gradlew test jacocoTestCoverageVerification
+
+      - name: Upload test report (JUnit HTML + XML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: |
+            build/reports/tests/test
+            build/test-results/test
+          if-no-files-found: warn
+
+      - name: Upload Cucumber report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cucumber-report
+          path: build/reports/cucumber
+          if-no-files-found: warn
 
       - name: Upload JaCoCo execution data
         uses: actions/upload-artifact@v4
@@ -45,6 +63,32 @@ jobs:
             build/jacoco
             build/classes
           retention-days: 1
+
+  mutation:
+    needs: build
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:412a8cef2b91
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mutation testing with PIT (mutation score >= 90 %)
+        run: ./gradlew pitest
+
+      - name: Upload PIT mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pitest-report
+          path: build/reports/pitest
+          if-no-files-found: warn
 
   coverage:
     needs: test
@@ -70,11 +114,11 @@ jobs:
       - name: Generate JaCoCo coverage report
         run: ./gradlew jacocoTestReport -x test
 
-      - name: Upload JaCoCo coverage report
+      - name: Upload JaCoCo coverage report (HTML + XML)
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-report
-          path: build/reports/jacoco/test/html
+          path: build/reports/jacoco/test
           if-no-files-found: error
 
       - name: Extract coverage summary
