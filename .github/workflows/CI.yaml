@@ -1,7 +1,8 @@
 on:
+  # every commit on every branch; main is covered by coverage-history.yaml
   push:
-    branches:
-      - develop
+    branches-ignore:
+      - main
   pull_request:
     branches:
       - main

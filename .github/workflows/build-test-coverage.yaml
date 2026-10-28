@@ -37,6 +37,24 @@ jobs:
       - name: Test and verify coverage (branch coverage >= 90 %)
         run: ./gradlew test jacocoTestCoverageVerification
 
+      - name: Upload test report (JUnit HTML + XML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: |
+            build/reports/tests/test
+            build/test-results/test
+          if-no-files-found: warn
+
+      - name: Upload Cucumber report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cucumber-report
+          path: build/reports/cucumber
+          if-no-files-found: warn
+
       - name: Upload JaCoCo execution data
         uses: actions/upload-artifact@v4
         with:
@@ -96,11 +114,11 @@ jobs:
       - name: Generate JaCoCo coverage report
         run: ./gradlew jacocoTestReport -x test
 
-      - name: Upload JaCoCo coverage report
+      - name: Upload JaCoCo coverage report (HTML + XML)
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-report
-          path: build/reports/jacoco/test/html
+          path: build/reports/jacoco/test
           if-no-files-found: error
 
       - name: Extract coverage summary
