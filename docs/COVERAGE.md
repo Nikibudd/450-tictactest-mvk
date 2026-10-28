@@ -1,40 +1,70 @@
 # Test Coverage Gate
 
-Beschreibt, wie JaCoCo-Testabdeckung in Pull Requests geprüft, kommentiert und über die Zeit
-nachverfolgt wird. Umgesetzt in `.github/workflows/CI.yaml` (Jobs `coverage`, `coverage-check`,
-`update-coverage-history`).
+Beschreibt, wie JaCoCo-Testabdeckung geprüft, im Pull Request kommentiert und über die Zeit
+nachverfolgt wird. Umgesetzt über drei Workflow-Dateien:
+
+- `.github/workflows/build-test-coverage.yaml` — **reusable workflow** (`workflow_call`), enthält
+  die Jobs `build`, `test` (inkl. JaCoCo-Verification), `mutation` (PITest) und `coverage`
+  (generiert den JaCoCo-Report und extrahiert die Kennzahlen in ein `coverage-summary`-Artifact). Wird von den beiden folgenden Workflows aufgerufen, damit
+  diese Logik nicht doppelt gepflegt werden muss.
+- `.github/workflows/CI.yaml` — Validierung bei **jedem Commit** (Push auf jeden Branch ausser
+  `main`) und bei Pull Requests: ruft
+  `build-test-coverage.yaml` auf, danach prüft `coverage-check` Minimum & Regression und kommentiert
+  den PR.
+- `.github/workflows/coverage-history.yaml` — läuft **nur bei Push auf `main`**, und nur wenn sich
+  Code/Tests tatsächlich geändert haben (Pfadfilter auf `src/**`, `build.gradle`, `gradlew` etc.).
+  Ruft ebenfalls `build-test-coverage.yaml` auf, danach hängt `update-coverage-history` den Stand an
+  `history.csv` im Branch `coverage-history` an.
 
 ## Ablauf
 
 ```
-Push / Pull Request
-        │
-        ▼
-┌────────────────┐
-│ build, test      │
-└────────┬─────────┘
-         ▼
-┌────────────────┐
-│ coverage         │  generiert jacocoTestReport (XML + HTML), extrahiert
-│                  │  Line-/Branch-Coverage in coverage-summary Artifact
-└────────┬─────────┘
-         │
-   ┌─────┴─────────────────────┐
-   ▼ (nur bei Pull Request)    ▼ (nur bei Push auf main)
-┌────────────────┐   ┌──────────────────────┐
-│ coverage-check   │   │ update-coverage-history │
-│ vergleicht mit   │   │ hängt neuen Eintrag an  │
-│ Minimum & letztem│   │ history.csv im Branch   │
-│ main-Stand,      │   │ coverage-history an      │
-│ kommentiert PR,  │   └──────────────────────┘
-│ failt bei Verstoß│
-└────────────────┘
+Push (≠ main) / Pull Request             Push auf main (Code/Tests geändert)
+        │                                          │
+        ▼                                          ▼
+┌──────────────────────┐                 ┌──────────────────────┐
+│ build-test-coverage    │                 │ build-test-coverage    │
+│ build → test/mutation  │                 │ build → test/mutation  │
+│       → coverage       │                 │       → coverage       │
+└──────────┬────────────┘                 └──────────┬────────────┘
+           ▼                                          ▼
+   ┌────────────────┐                       ┌──────────────────────┐
+   │ coverage-check   │  (nur Pull Request)                       │ update-coverage-history │
+   │ vergleicht mit   │                       │ hängt neuen Eintrag an  │
+   │ Minimum & letztem│                       │ history.csv im Branch   │
+   │ main-Stand,      │                       │ coverage-history an      │
+   │ kommentiert PR,  │                       └──────────────────────┘
+   │ failt bei Verstoß│
+   └────────────────┘
 ```
+
+`build`/`test` laufen dadurch **nicht mehr** bei jedem Push auf `main` — nur noch, wenn Code oder
+Tests sich geändert haben, und nicht doppelt zur bereits im PR gelaufenen Validierung. Ein reiner
+Doku- oder Workflow-Änderungs-Merge auf `main` löst keinen weiteren Build/Test/Coverage-Lauf aus.
+
+## Reports als Build Artifacts
+
+Jeder Lauf von `build-test-coverage.yaml` lädt alle Reports als Artifacts hoch (Tab *Summary* des
+Workflow-Runs). Test-, Cucumber- und PIT-Reports werden mit `if: always()` auch bei roten Tests
+hochgeladen.
+
+| Artifact | Inhalt | Job |
+|---|---|---|
+| `test-report` | JUnit HTML-Report + XML-Resultate | `test` |
+| `cucumber-report` | Cucumber HTML-Report | `test` |
+| `jacoco-report` | JaCoCo HTML + XML | `coverage` |
+| `pitest-report` | PIT Mutation-Report HTML + XML | `mutation` |
+| `coverage-summary` | Kennzahlen für `coverage-check` (intern, 1 Tag) | `coverage` |
+| `jacoco-exec-data` | JaCoCo Rohdaten (intern, 1 Tag) | `test` |
 
 ## Regeln
 
-- **Minimum**: Line Coverage muss ≥ 10 % sein (`THRESHOLD` in `CI.yaml`, aktuell bewusst niedrig
-  angesetzt, da die Testsuite noch am Anfang steht — kann später erhöht werden).
+- **Branch Coverage ≥ 90 %** (JaCoCo Test Coverage Verification): in `build.gradle` als
+  `jacocoTestCoverageVerification` mit Regel `BRANCH` / `COVEREDRATIO` / `0.90` konfiguriert und an
+  `check` gehängt. Läuft lokal mit `./gradlew check` und in CI im Job `test` (`ci / test`, required
+  check) — eine Unterschreitung lässt den Build fehlschlagen.
+- **Minimum**: Line Coverage muss ≥ 90 % sein (`THRESHOLD` in `CI.yaml`; ursprünglich 10 %, als die
+  Testsuite noch am Anfang stand, mit der vollständigen Testsuite auf 90 % angehoben).
 - **Keine Regression**: Line Coverage eines PRs darf nicht tiefer sein als der zuletzt auf `main`
   gemessene Stand.
 - Beide Prüfungen laufen im Job `coverage-check`, der als **required status check** für `main`
@@ -46,5 +76,5 @@ Push / Pull Request
 
 `history.csv` liegt in einem eigenen, **von `main` unabhängigen** Branch `coverage-history` (siehe
 dessen `README.md`). Er wird ausschliesslich vom `update-coverage-history`-Job gepflegt, bei jedem
-Push auf `main`. Format und Zweck sind dort dokumentiert — geplant ist eine spätere Visualisierung
-dieser Zeitreihe über GitHub Pages (noch nicht umgesetzt).
+Push auf `main` mit Code-/Test-Änderungen. Format und Zweck sind dort dokumentiert — geplant ist
+eine spätere Visualisierung dieser Zeitreihe über GitHub Pages (noch nicht umgesetzt).

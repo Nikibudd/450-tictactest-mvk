@@ -11,8 +11,9 @@ Jedes Image wird mit dem **Commit-Hash** (kurz, 12 Zeichen) des Commits getaggt,
 
 - Automatisch, eindeutig, kein manuelles Versionieren nötig.
 - Der Tag ist ein Audit-Trail: man sieht sofort, welcher Commit ein Image erzeugt hat.
-- Es gibt **kein** bewegliches `latest`. `CI.yaml` und `devcontainer.json` referenzieren immer einen
-  konkreten, gepinnten Hash — reproduzierbar, kein "was ist gerade latest"-Rätsel.
+- Es gibt **kein** bewegliches `latest`. `build-test-coverage.yaml` und `devcontainer.json`
+  referenzieren immer einen konkreten, gepinnten Hash — reproduzierbar, kein "was ist gerade
+  latest"-Rätsel.
 
 ## Ablauf
 
@@ -26,7 +27,7 @@ Push auf main (.devcontainer/Dockerfile geändert)
           │
           ▼
 ┌────────────────────┐
-│ open-release-pr     │  ersetzt den Image-Tag in CI.yaml + devcontainer.json
+│ open-release-pr     │  ersetzt den Image-Tag in build-test-coverage.yaml + devcontainer.json
 └─────────┬───────────┘  durch <commit-sha>, öffnet PR
           │
           ▼
@@ -41,8 +42,8 @@ Bei Pull Requests, die `.devcontainer/Dockerfile` ändern, läuft nur `build-and
 
 Der Trigger reagiert bewusst nur auf `.devcontainer/Dockerfile`, nicht auf das ganze
 `.devcontainer/`-Verzeichnis: Nur Änderungen am Dockerfile verändern das Image tatsächlich. Der
-Release-PR selbst ändert nur `CI.yaml` und `devcontainer.json` (Referenzen), nie das Dockerfile —
-sein Merge löst also keinen erneuten Build aus. Frühere Version hatte hier einen Bug: ein separates
+Release-PR selbst ändert nur `build-test-coverage.yaml` und `devcontainer.json` (Referenzen), nie
+das Dockerfile — sein Merge löst also keinen erneuten Build aus. Frühere Version hatte hier einen Bug: ein separates
 `RELEASED_VERSION`-Audit-File lag unter `.devcontainer/**` und löste beim Mergen des Release-PRs
 einen Loop aus (Build → Freigabe → neuer Release-PR → Merge → Build → ...). Diese Datei wurde
 entfernt.
@@ -57,9 +58,10 @@ den PR reviewt und mergt.
 
 ## Nutzung durch CI und lokale Umgebung
 
-- **CI (`CI.yaml`)**: alle drei Jobs (`build`, `test`, `coverage`) referenzieren
+- **CI (`build-test-coverage.yaml`)**: alle drei Jobs (`build`, `test`, `coverage`) referenzieren
   `ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:<commit-sha>` — der jeweils zuletzt freigegebene
-  Stand.
+  Stand. Dieser reusable Workflow wird sowohl von `CI.yaml` (Pull Requests) als auch von
+  `coverage-history.yaml` (Push auf main) aufgerufen, siehe `docs/COVERAGE.md`.
 - **Lokal (`devcontainer.json`)**: `"image": "ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:<commit-sha>"`
   — beim Neu-Öffnen des DevContainers wird automatisch derselbe freigegebene Stand gezogen, kein
   lokaler Build aus dem `Dockerfile` mehr.

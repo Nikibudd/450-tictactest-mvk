@@ -1,103 +1,122 @@
 # TicTacToe Test Concept
 
-This document describes the test concept for the TicTacToe project. It covers what is tested, how it is tested, the tools used and which parts of the code are currently covered by automated tests.
+This document describes the test concept for the TicTacToe project. It covers what is tested, how it is tested, the tools used and which parts of the code are covered by automated tests.
 
 ## 1. Purpose and Scope
 
-The goal of the test concept is to make sure the core game logic in `TicTacToeMain` behaves correctly, independent of any concrete player implementation or console input/output. The tests focus on pure, deterministic logic that can be verified without user interaction.
+The goal of the test concept is to make sure the game behaves according to the rules of tic-tac-toe (see §2.1), for the game logic in `TicTacToeMain` as well as for every player implementation and the console interaction.
 
 In scope:
 
-- Win detection logic (`isWin`), including all possible winning lines
-- Input validation of the game loop (`play`)
+- Win detection (`isWin`) for both colors, all 8 lines, nearly complete and blocked lines
+- The game loop (`play`): alternating turns, win, draw, invalid moves
+- Console rendering (`toString`) and console interaction (`main`, `HumanPlayer` via stdin/stdout)
+- All player implementations: `GreedyPlayer`, `HumanPlayer`, `PerfectPlayer`
+- `Stone.opponent()`
 
-Out of scope (not covered by automated tests):
-
-- Console output formatting (`toString`)
-- `HumanPlayer` (depends on console input)
-- `GreedyPlayer` (concrete move selection strategy)
-- Full game flow of `play` (a complete game from start to finish)
+Out of scope: nothing of the production code. Non-numeric input of a human player is tested, but only to document the current behavior (a `NumberFormatException` ends the game).
 
 ## 2. Test Object
 
 Package under test: `ch.bbw.m450.tictactoe`
 
-Main classes:
+- `TicTacToeMain` contains the game logic (`isWin`, `play`, `toString`) and the `main` entry point (human vs. greedy player).
+- `TicTacToePlayer` is the interface every player implements. `Stone` (`CROSS`, `CIRCLE`) is a field of the board, `null` is an empty field.
+- `GreedyPlayer` plays the first free field, `HumanPlayer` reads the position from stdin, `PerfectPlayer` plays perfectly using minimax.
+- The board is a `Stone[9]`, indexed row by row:
 
-- `TicTacToeMain` contains the game logic (`isWin`, `play`, `toString`) and the `main` entry point.
-- `TicTacToePlayer` is the interface every player implementation has to fulfill (`HumanPlayer`, `GreedyPlayer`).
+```
+ 0 | 1 | 2
+---+---+---
+ 3 | 4 | 5
+---+---+---
+ 6 | 7 | 8
+```
+
+### 2.1 Test Basis (Requirements)
+
+| ID | Requirement |
+|---|---|
+| R1 | A color wins with three own stones in a row, column or diagonal. Stones of the other color or empty fields never count. |
+| R2 | X starts, the players alternate. The game ends at the first win or after 9 moves as a draw (`null`). |
+| R3 | A move outside 0–8 or onto an occupied field ends the game with an `IllegalStateException`, the board is printed before. |
+| R4 | The same player instance must not play both colors (`IllegalArgumentException`). |
+| R5 | The console shows stones bold, free fields grey with their index; the human player is prompted and enters one position per line. |
+| R6 | The perfect player never loses, takes an immediate win and blocks the opponent. |
 
 ## 3. Tools and Framework
 
-- Test runner: JUnit 5 (Jupiter), including the parameterized tests extension (`junit-jupiter-params`)
-- Assertions: AssertJ (`org.assertj.core.api.WithAssertions`)
-- Build tool: Gradle (task `test`, configured with `useJUnitPlatform()`)
-- Test class: `src/test/java/ch/bbw/m450/tictactoe/TicTacToeMainTest.java`
+| Purpose | Tool |
+|---|---|
+| Test runner | JUnit 6 (Jupiter) incl. parameterized tests |
+| Assertions | AssertJ (`WithAssertions`) plus a custom `BoardAssert` |
+| StdIn/StdOut | JUnit Pioneer (`@StdIo`, `StdIn`, `StdOut`) |
+| BDD (additional framework) | Cucumber 8 via the JUnit Platform Suite engine |
+| Coverage | JaCoCo report + coverage verification (branch coverage ≥ 90 %) |
+| Mutation testing | PITest (mutation score ≥ 90 %) |
+| Build | Gradle |
 
-Tests are executed with:
+Test helpers in `src/test/java/ch/bbw/m450/tictactoe/`:
 
-```
-./gradlew test
-```
+- `Boards`: `board("XO.", ".X.", "..O")` builds a board the way it looks, `boardWithStonesAt(color, positions...)`, `emptyBoard()`
+- `BoardAssert`: `assertThatBoard(board).isWonBy(CROSS).isNotWonBy(CIRCLE)`, `hasNoWinner()` with a readable failure message showing the board
+- `ScriptedPlayer`: `ScriptedPlayer.playing(0, 4, 8)`, a deterministic stub that plays fixed positions
 
 ## 4. Test Strategy
 
-Tests are written against the static methods of `TicTacToeMain`. The naming pattern follows GIVEN / WHEN / THEN, for example:
+### 4.1 Test levels
 
-```
-given_boardWithWinningLineOfCross_when_isWinIsChecked_then_returnsTrue
-```
+- **Unit tests**: `isWin`, `toString`, `Stone`, each player in isolation
+- **Component tests**: `play` with `ScriptedPlayer` stubs (no concrete player involved)
+- **System tests**: `TicTacToeConsoleTest` runs `main` with stdin/stdout replaced by Pioneer, Cucumber scenarios describe the perfect player in business language
 
-- GIVEN describes the starting state (usually a board array).
-- WHEN describes the method call under test.
-- THEN describes the expected result.
+### 4.2 Test design techniques
 
-Where the same check has to be repeated for multiple inputs, a `@ParameterizedTest` with a `@MethodSource` is used instead of writing one test method per case. This applies to the win detection test, which is run once for every one of the 8 possible winning lines on the board.
+- **Equivalence classes**: full line (win) / nearly complete line / blocked line / no line, for both colors
+- **Boundary values**: positions `-1` and `9` (just outside the board), a line with exactly one field missing, the win with the 9th (last) move
+- **Decision table**: `isWin` is a disjunction of 8 lines × 3 conditions; every condition is made true and false at least once (full line, gap at each of the 3 positions)
+- **Exhaustive testing**: the perfect player is played against every possible opponent (all game trees)
 
-Two private helper methods keep the test data setup short and readable:
+### 4.3 Conventions
 
-- `emptyBoard()` returns a fresh board with all 9 fields set to `null`.
-- `boardWithStonesAt(color, positions...)` returns a board where the given positions are filled with the given color, all other fields stay empty.
+- Test names follow `given_<state>_when_<action>_then_<result>`.
+- Whenever only the data of a test differs, a `@ParameterizedTest` is used (`@MethodSource`, `@CsvSource`, `@EnumSource`) instead of copied test methods. Boards in `@CsvSource` are written as three row strings.
+- Exceptions are checked with `assertThatIllegalStateException()` / `assertThatIllegalArgumentException()` including the message, because the message contains the invalid position and is shown to the user.
+- Only fluent AssertJ assertions, no `assertTrue`.
 
-No mocking framework is used. Where a `TicTacToePlayer` instance is needed, the existing `GreedyPlayer` implementation is reused directly instead of creating a test double, since only reference identity matters for the test in question.
+## 5. Test Cases
 
-## 5. Existing Test Cases
+Detailed list in [`TESTS.md`](TESTS.md). Overview (160 tests):
 
-| # | Test method | Given | When | Then |
-|---|---|---|---|---|
-| 0 | `dummyTest` | no precondition | `assertTrue(true)` is evaluated | test always passes, confirms JUnit 5 is set up correctly |
-| 1 | `given_boardWithWinningLineOfCross_when_isWinIsChecked_then_returnsTrue` (parameterized, 8 cases) | a board where one of the 8 possible winning lines (3 rows, 3 columns, 2 diagonals) is fully occupied by CROSS, all other fields empty | `isWin(board, Stone.CROSS)` is called | returns `true` for every one of the 8 lines |
-| 2 | `given_emptyBoard_when_isWinIsChecked_then_returnsFalse` | completely empty board (all 9 fields `null`) | `isWin(board, color)` is called for CROSS and for CIRCLE | returns `false` in both cases, no line exists |
-| 3 | `given_samePlayerInstanceForBothSides_when_playIsCalled_then_throwsIllegalArgumentException` | the same `TicTacToePlayer` instance (`GreedyPlayer`) is passed as `xPlayer` and as `oPlayer` | `play(player, player)` is called | throws `IllegalArgumentException` with message `"players must differ"` |
-
-The 8 winning line cases provided by `allWinningLines()` are:
-
-| Line | Positions | Description |
+| Test class | Tests | Covers |
 |---|---|---|
-| 1 | 0, 1, 2 | top row |
-| 2 | 3, 4, 5 | middle row |
-| 3 | 6, 7, 8 | bottom row |
-| 4 | 0, 3, 6 | left column |
-| 5 | 1, 4, 7 | middle column |
-| 6 | 2, 5, 8 | right column |
-| 7 | 0, 4, 8 | diagonal top left to bottom right |
-| 8 | 2, 4, 6 | diagonal top right to bottom left |
+| `TicTacToeMainTest.IsWin` | 115 | R1: 2 colors × 8 lines, 96 nearly complete/blocked lines, 3 boards without line |
+| `TicTacToeMainTest.Play` | 8 | R2–R4: X wins, O wins, win with 9th move, draw, 3 invalid moves, same instance |
+| `TicTacToeMainTest.ToString` | 2 | R5: content and ANSI formatting |
+| `TicTacToeConsoleTest` | 5 | R2, R3, R5 via stdin/stdout: human wins, human loses, invalid input, board printed on invalid move, draw message |
+| `StoneTest` | 2 | `opponent()` for both colors |
+| `GreedyPlayerTest` | 5 | first free field, full board |
+| `HumanPlayerTest` | 4 | R5: reads position, prints prompt, one line per move, non-numeric input |
+| `PerfectPlayerTest` | 12 | R6: best moves, board unchanged, full board, draw vs. itself, beats greedy, never loses (exhaustive) |
+| `perfect_player.feature` (Cucumber) | 7 | R6 as BDD scenarios |
 
-## 6. Coverage Assessment
+## 6. Execution, Entry and Exit Criteria
 
-`isWin` is fully covered for all 8 winning lines that exist on the board, plus the negative case of no line at all (empty board, checked for both colors). This is a complete coverage of every branch inside `isWin`.
+| | |
+|---|---|
+| **Locally** | `./gradlew check` (tests, coverage report and verification), `./gradlew pitest` (mutation testing) |
+| **CI** | On every push (all branches) and on pull requests, see [`COVERAGE.md`](COVERAGE.md). All reports are uploaded as build artifacts. |
+| **Environment** | Devcontainer image (Alpine, Azul Zulu JDK 25), same image locally and in CI |
+| **Entry** | The code compiles (`build` job). |
+| **Exit** | All tests green, branch coverage ≥ 90 % (JaCoCo verification), line coverage ≥ 90 % and not lower than on `main` (PR check), mutation score ≥ 90 % (PIT). |
+| **Failing tests** | A red build blocks the merge (required checks). The HTML reports in the artifacts show the cause, they are uploaded even when tests fail. |
 
-`play` is only covered for its input validation (rejecting identical player instances). The actual game loop, the alternating turns, the win detection during play and the draw case are not covered by automated tests yet.
+Measured on 2026-10-27: line coverage 100 %, branch coverage 100 %, mutation score 100 % (72/72 mutants killed).
 
-## 7. Open Points / Suggested Additions
+## 7. Open Points
 
-These are gaps identified while reviewing the current test suite, not yet implemented:
-
-- A test for `play` that results in a draw (no winner after 9 rounds).
-- A test for `play` that results in a win, using two deterministic stub players.
-- A test for `play` where a player returns an out of range or already occupied position, expecting an `IllegalStateException`.
-- A test verifying `Stone.opponent()` returns the correct opposite value for both `CROSS` and `CIRCLE`.
-- A test verifying `isWin` returns `false` on a board that is full but has no winning line (draw situation).
+- `HumanPlayer` ends the game with a `NumberFormatException` on non-numeric input. Asking again would be friendlier; the behavior is documented by a test so a change is a conscious decision.
+- `main` always plays human vs. greedy player. Choosing the `PerfectPlayer` as opponent would need a small menu (and new console tests).
 
 ## 8. Audit (2026-09-16)
 
@@ -132,3 +151,22 @@ Ergebnis: 2 kritisch, 4 hoch, 5 mittel, 4 niedrig. Das Konzept war in diesem Zus
 3. H3 und M2: `play`-Tests mit Stubs schreiben (Gewinn, Remis, ungültiger Zug → `IllegalStateException`)
 4. H2, H4 und M4: Testbasis, Verfahren und fehlende Konzeptabschnitte ergänzen
 5. Rest: redaktionelle Korrekturen
+
+## 9. Umsetzung der Audit-Massnahmen (2026-10-27)
+
+| ID | Status | Umsetzung |
+|---|---|---|
+| K1 | erledigt | JaCoCo misst 100 % Line/Branch Coverage, `jacocoTestCoverageVerification` erzwingt ≥ 90 % Branch Coverage (§6). |
+| K2 | erledigt | Jeder Gewinnlinien-Test prüft zusätzlich `isNotWonBy(color.opponent())`. |
+| H1 | erledigt | 96 Beinahe-Linien (je Linie jede der 3 Positionen leer oder vom Gegner besetzt), PIT bestätigt: alle Mutanten in `isWin` werden getötet. |
+| H2 | erledigt | Anforderungen R1–R6 (§2.1), Testklassen darauf referenziert (§5). |
+| H3 | erledigt | `play` mit `ScriptedPlayer`-Stubs: Gewinn X/O, Gewinn im 9. Zug, Remis, ungültige Züge. |
+| H4 | erledigt | Testentwurfsverfahren in §4.2. |
+| M1 | erledigt | `toString`, `GreedyPlayer`, `HumanPlayer` und `main` sind jetzt im Scope. |
+| M2 | erledigt | `ScriptedPlayer` statt `GreedyPlayer` im Guard-Test. |
+| M3 | erledigt | Kreuzprodukt Farbe × Linie (16 Fälle). |
+| M4 | erledigt | Testebenen (§4.1), Ein-/Ausstiegskriterien, Umgebung, Ausführung (§6). |
+| M5 | erledigt | §7 neu, enthält nur noch bewusst offene Punkte. |
+| N1, N2 | erledigt | `dummyTest` und `assertTrue` entfernt, nur noch AssertJ. |
+| N3 | erledigt | `Stone` und Brett-Layout in §2. |
+| N4 | erledigt | Leeres Brett ist Teil eines parametrisierten Tests; Message-Vergleich begründet in §4.3. |
