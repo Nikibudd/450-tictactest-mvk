@@ -1,6 +1,7 @@
 .*
 !.git*
 !.devcontainer
+!.editorconfig
 
 build/
 !**/src/main/**/build/
