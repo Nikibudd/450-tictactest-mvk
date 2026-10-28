@@ -58,10 +58,10 @@ den PR reviewt und mergt.
 
 ## Nutzung durch CI und lokale Umgebung
 
-- **CI (`build-test-coverage.yaml`)**: alle drei Jobs (`build`, `test`, `coverage`) referenzieren
+- **CI (`build-test-coverage.yaml`)**: alle Jobs (`build`, `test`, `mutation`, `coverage`) referenzieren
   `ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:<commit-sha>` — der jeweils zuletzt freigegebene
   Stand. Dieser reusable Workflow wird sowohl von `CI.yaml` (Pull Requests) als auch von
-  `coverage-history.yaml` (Push auf main) aufgerufen, siehe `docs/COVERAGE.md`.
+  `main.yaml` (Push auf main) aufgerufen, siehe `docs/COVERAGE.md`.
 - **Lokal (`devcontainer.json`)**: `"image": "ghcr.io/nikibudd/450-tictactest-mvk-devcontainer:<commit-sha>"`
   — beim Neu-Öffnen des DevContainers wird automatisch derselbe freigegebene Stand gezogen, kein
   lokaler Build aus dem `Dockerfile` mehr.

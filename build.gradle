@@ -21,8 +21,25 @@ repositories {
 	mavenCentral()
 }
 
+java {
+	// bytecode for Java 21 (LTS), so the released jar also runs on older JDKs than the one building it
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.withType(JavaCompile).configureEach {
+	options.release = 21
+}
+
 application {
 	mainClass = 'ch.bbw.m450.tictactoe.TicTacToeMain'
+}
+
+jar {
+	// makes the jar runnable with `java -jar`
+	manifest {
+		attributes 'Main-Class': application.mainClass.get()
+	}
 }
 
 test {

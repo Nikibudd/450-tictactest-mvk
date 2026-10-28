@@ -16,8 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build
-        run: ./gradlew build -x test
+      - name: Build (jar version = 12-char commit hash)
+        run: ./gradlew build -x test -Pversion="$(echo "$GITHUB_SHA" | cut -c1-12)"
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: tictactoe-jar
+          path: build/libs/*.jar
+          if-no-files-found: error
 
   test:
     needs: build
