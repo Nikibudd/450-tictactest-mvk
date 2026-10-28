@@ -34,8 +34,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Test
-        run: ./gradlew test
+      - name: Test and verify coverage (branch coverage >= 90 %)
+        run: ./gradlew test jacocoTestCoverageVerification
 
       - name: Upload JaCoCo execution data
         uses: actions/upload-artifact@v4
