@@ -5,6 +5,12 @@ const terminal = document.getElementById("terminal");
 terminal.src = backendUrl + "/";
 document.getElementById("terminal-link").href = backendUrl + "/";
 
+// eine neue Verbindung startet bei der Web-Konsole einen neuen Prozess, also eine neue Partie
+document.getElementById("new-game").addEventListener("click", () => {
+  terminal.src = backendUrl + "/?t=" + Date.now();
+  terminal.focus();
+});
+
 async function showVersion(elementId, url, read) {
   const element = document.getElementById(elementId);
   try {

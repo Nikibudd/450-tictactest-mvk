@@ -58,6 +58,24 @@ kbd {
   background: #000;
 }
 
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+button {
+  font: inherit;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:hover { filter: brightness(1.1); }
+
 .hint { font-size: 0.85rem; color: var(--muted); }
 a { color: var(--accent); }
 
