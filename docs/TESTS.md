@@ -41,7 +41,7 @@ Brett-Notation in den Tabellen: drei Zeilen à drei Zeichen, `X` = CROSS, `O` = 
 
 | Test | GIVEN (stdin) | WHEN | THEN (stdout) |
 |---|---|---|---|
-| `given_humanCompletesLeftColumn_..._announcesCrossAsWinner` | `0`, `3`, `6` | `main` | 3 Prompts, letzte Zeile "...and the winner is: CROSS" |
+| `given_humanPlaysPerfectly_..._endsInDraw` | `4`, `2`, `3`, `7`, `8` | `main` (gegen `PerfectPlayer`) | 5 Prompts, letzte Zeile "it's a draw!" |
 | `given_humanIgnoresTopRow_..._announcesCircleAsWinner` | `8`, `7`, `5` | `main` | letzte Zeile "...and the winner is: CIRCLE" |
 | `given_humanEntersPositionOutsideBoard_..._printsBoardAndFails` | `9` | `main` | Prompt ausgegeben, `IllegalStateException` |
 | `given_invalidMove_..._printsBoardBeforeFailing` | Stubs spielen beide `0` | `play` | Ausgabe beginnt mit dem Brett `X..` |
