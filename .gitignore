@@ -22,3 +22,18 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# OpenTofu / Terraform
+!.terraform.lock.hcl
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+*.tfplan
+crash.log
+override.tf
+*_override.tf
+
+# lokaler Start aus Release-Assets (scripts/run-local.sh)
+.local-run/
