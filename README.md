@@ -9,6 +9,7 @@ das Frontend ist eine statische Seite in einem S3-Bucket.
 
 ## Dokumentation
 
+- [IAC.md](docs/IAC.md): Einstieg OpenTofu, State und Git, Kosten
 - [webkonsole.md](docs/webkonsole.md): Web-Konsole, Sicherheit, Versionsabfrage, Frontend
 - [deployment.md](docs/deployment.md): Infrastruktur, Deployment, Secrets, Reflexion
 - [RELEASE.md](docs/RELEASE.md): Release-Prozess
