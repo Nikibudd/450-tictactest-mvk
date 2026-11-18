@@ -1,0 +1,95 @@
+# Deployt die Artefakte eines bestehenden Releases nach production. Baut nichts und ändert keine Infrastruktur.
+# - aufgerufen von release.yaml: nur die Teile, die sich seit dem vorherigen Release geändert haben
+# - von Hand (Actions → deploy → Run workflow): eine beliebige veröffentlichte Version, z. B. für ein Rollback
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+      backend:
+        type: boolean
+        default: true
+      frontend:
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release-Tag, z. B. v1.2.0
+        type: string
+        required: true
+      backend:
+        description: Backend (Jar) deployen
+        type: boolean
+        default: true
+      frontend:
+        description: Frontend deployen
+        type: boolean
+        default: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    # Secrets und Variablen liegen im Environment; nur main und Tags v* dürfen es verwenden
+    environment:
+      name: production
+      url: ${{ vars.FRONTEND_URL }}
+    # nie zwei Deployments gleichzeitig; ein weiteres wartet, statt das laufende abzubrechen
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      INSTANCE_ID: ${{ vars.INSTANCE_ID }}
+      ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+      FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET }}
+      BACKEND_URL: ${{ vars.BACKEND_URL }}
+      FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+      REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check release exists
+        run: |
+          gh release view "$TAG" -R "$REPO" > /dev/null \
+            || { echo "::error::Release $TAG gibt es nicht"; exit 1; }
+
+      - name: Check AWS credentials
+        run: |
+          aws sts get-caller-identity > /dev/null || {
+            echo "::error::AWS-Credentials ungültig oder abgelaufen (Learner-Lab-Session beendet?)." \
+              "Lab starten, scripts/github-set-aws-credentials.sh ausführen und diesen Lauf mit 'Re-run failed jobs' wiederholen."
+            exit 1
+          }
+
+      - name: Deploy backend
+        if: inputs.backend
+        run: scripts/deploy-backend.sh "$TAG"
+
+      - name: Deploy frontend
+        if: inputs.frontend
+        run: scripts/deploy-frontend.sh "$TAG"
+
+      - name: Summary
+        if: always()
+        env:
+          BACKEND: ${{ inputs.backend }}
+          FRONTEND: ${{ inputs.frontend }}
+        run: |
+          {
+            echo "### Deployment $TAG"
+            echo "| | deployt | läuft jetzt |"
+            echo "|---|---|---|"
+            echo "| Backend | $BACKEND | $(curl -fsS --max-time 5 "$BACKEND_URL/version.txt" || echo '?') |"
+            echo "| Frontend | $FRONTEND | $(curl -fsS --max-time 5 "$FRONTEND_URL/version.json" | jq -r .version || echo '?') |"
+            echo
+            echo "Spielen: $FRONTEND_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
