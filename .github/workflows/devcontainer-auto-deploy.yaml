@@ -1,5 +1,8 @@
 on:
   push:
+    # branches only: for tag pushes GitHub ignores the paths filter and would rebuild the image on every release
+    branches:
+      - '**'
     paths:
       - '.devcontainer/Dockerfile'
   pull_request:
