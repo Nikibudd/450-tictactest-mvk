@@ -165,6 +165,24 @@ Entscheidung: SSM.
 - Release A (`v1.0.0`) und Release B (`v1.1.0`, Knopf "Neue Partie") von Hand deployt.
   Nach Release B meldet `tofu plan`: "No changes. Your infrastructure matches the configuration."
 
+## Robustheit
+
+### Einrichtung der Instanz ändern
+
+Experiment: `Environment=LANG=C.UTF-8` in `deploy/tictactest.service` ergänzt.
+
+- `tofu plan`: `aws_instance.tictactest must be replaced`, `user_data … # forces replacement`,
+  `aws_eip.tictactest will be updated in-place`. "1 to add, 1 to change, 1 to destroy".
+- Nach `tofu apply`: neue Instanz (`i-09f1…` → `i-0e5e…`), **gleiche IP und URL** (die Elastic IP wird
+  der neuen Instanz zugeordnet). Nach rund einer Minute ist die Instanz eingerichtet und in SSM online.
+- **Laufende Version: keine.** Die neue Instanz hat kein Jar, `/version.txt` liefert 404.
+- Wieder herstellen: `scripts/github-set-infra-vars.sh` (neue Instanz-ID nach GitHub), dann Deploy-Workflow von Hand
+  mit `v1.5.1`, nur Backend. Danach läuft 1.5.1 und `tofu plan` meldet keine Änderungen.
+
+Eine Änderung an der Einrichtung ist also immer auch ein Deployment: Instanz-ID in GitHub aktualisieren und die
+aktuelle Version erneut deployen. Ohne `user_data_replace_on_change` hätte OpenTofu die Instanz nur gestoppt und
+gestartet, `user_data` wäre aber nicht noch einmal gelaufen: Die Änderung hätte nichts bewirkt.
+
 ## Automatisches Deployment
 
 ```
@@ -264,3 +282,143 @@ IAM-Rolle diesem Identity Provider nur für `repo:Nikibudd/450-tictactest-mvk:en
 `aws-actions/configure-aws-credentials` tauscht das Token gegen kurzlebige Credentials (z. B. 1 Stunde).
 Es gibt nichts, was ablaufen, rotiert oder gestohlen werden müsste. Im Learner Lab geht das nicht, weil wir
 weder Identity Provider noch IAM-Rollen anlegen dürfen.
+
+## Änderungen zwischen Releases erkennen
+
+`scripts/detect-changes.sh <tag>` (Job `changes` in `release.yaml`):
+
+| Pfad | gehört zu | Begründung |
+|------|-----------|------------|
+| `src/main/`, `build.gradle`, `settings.gradle`, `gradle.properties`, `gradle/`, `gradlew*` | Backend | landet im Jar oder bestimmt, wie es gebaut wird |
+| `frontend/` | Frontend | Inhalt des Frontend-Archivs |
+| `src/test/`, `docs/`, `README.md` | weder noch | ändern kein Artefakt |
+| `.github/workflows/`, `scripts/` | weder noch | Werkzeuge des Deployments, kein Artefakt. Gilt eine Änderung auch für die laufende Version, deployt man von Hand neu |
+| `infra/`, `deploy/` | weder noch | Infrastruktur: `tofu apply` lokal, nicht die Pipeline |
+
+`build.gradle` zählt zum Backend, auch wenn sich nur eine Test-Abhängigkeit ändert. Lieber einmal zu viel deployen
+als eine Änderung am Jar zu verpassen.
+
+- **Vergleich mit dem vorherigen Release-Tag, nicht mit dem letzten Commit**: Ein Release fasst alle Commits seit dem
+  letzten Release zusammen. Ändert der erste Commit das Backend und der letzte nur die Doku, muss das Backend trotzdem
+  deployt werden. Der Vorgänger ist der nächste Tag `v*` in der History: `git describe --tags --abbrev=0 --match 'v*' "$TAG^"`.
+  Dafür braucht `actions/checkout` `fetch-depth: 0`.
+- **Erster Release**: Es gibt keinen vorherigen Tag, also wird beides deployt.
+- **Warum nicht der `paths`-Filter von GitHub Actions?** Bei Tag-Pushes wertet GitHub `paths` gar nicht aus. Ausserdem
+  vergleicht der Filter mit dem vorherigen Push, nicht mit dem vorherigen Release, und er kann nur den ganzen
+  Workflow starten oder nicht, aber nicht "nur Backend" und "nur Frontend" unterscheiden.
+- Getestet in einem Wegwerf-Repo mit fünf Tags (erster Release, nur Frontend, nur Backend, beides, nur Doku):
+  Alle fünf Ergebnisse stimmen.
+
+## Backend und Frontend im Betrieb
+
+**Spielende während eines Neustarts**: `systemctl restart tictactest` beendet ttyd und damit alle Java-Prozesse.
+Laufende Partien brechen ab, das Terminal zeigt "Press ⏎ to Reconnect", und Enter startet eine neue Partie mit der
+neuen Version. Verhindern liesse sich das z. B. so: Die neue Version startet als zweiter Dienst auf einem anderen
+Port, nginx leitet neue Verbindungen dorthin um, und der alte Dienst wird erst beendet, wenn seine letzte Partie
+fertig ist (Blue-Green mit Draining). Oder man deployt nur zu Zeiten ohne Spielende.
+
+**Woher weiss die Instanz nach einem Neustart, welche Version sie starten soll?** Aus dem Symlink
+`/opt/tictactest/current` auf der EBS-Disk. Ein Stopp des Learner Labs löscht die Disk nicht.
+
+**Frontend-Konfiguration**: Würde das Frontend-Deployment `config.js` löschen (z. B. `aws s3 sync --delete` ohne
+`--exclude config.js`), wüsste die Seite nicht mehr, wo die Web-Konsole ist: `app.js` bricht mit
+"Cannot read properties of undefined" ab, das Terminal bleibt leer. Schutz in drei Schichten:
+
+1. `config.js` aus dem Repo zeigt auf localhost und wird nie hochgeladen (`--exclude config.js` bei `sync`).
+2. `--exclude` schützt die Datei auch vor `--delete`.
+3. Nach jedem Frontend-Deployment prüft das Skript, dass `config.js` noch ausgeliefert wird. Fehlt sie,
+   stellt `tofu apply` sie wieder her.
+
+## Gezielt eine Version deployen
+
+Actions → **deploy** → Run workflow → Tag eingeben (z. B. `v1.3.0`), Backend und Frontend an- oder abwählen.
+Oder: `gh workflow run deploy.yaml -f tag=v1.3.0`.
+
+| Test | Ergebnis |
+|------|----------|
+| Rollback `v1.4.0` → `v1.3.0` | Erster Versuch [fehlgeschlagen](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/44288714978): Die Prüfung meldete "Frontend meldet '1.4.0' statt 1.3.0". Ursache: `aws s3 sync` lädt nur Dateien hoch, die grösser oder neuer sind. Die Dateien des älteren Releases waren älter als die im Bucket, `version.json` gleich gross, also blieb sie stehen. Behoben mit `unzip -DD` (Zeitstempel auf jetzt, #45). Danach [Rollback auf 1.3.0](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/44290387190) erfolgreich, Backend und Frontend zeigen 1.3.0. Die Prüfung im Workflow hat den Fehler gefunden, bevor ihn jemand im Browser bemerkt hätte. |
+| Kaputter Release `v1.5.0` (Jar mit falscher `Main-Class`, Tests grün) | [Deployment schlägt fehl](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/44292404589): "Could not find or load main class … Jar 1.5.0 startet nicht. Es läuft weiterhin: 1.4.0". Der Rauchtest läuft vor dem Umschalten, die Spielenden merken nichts. Behoben mit Revert und [`v1.5.1`](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/44293819300), rund 10 Minuten nach dem Fehlschlag (PR, CI, Release). Ein Rollback war nicht nötig, weil 1.4.0 nie gestoppt wurde. Ohne Rauchtest wäre die Seite kaputt gewesen, bis ein Rollback per Deploy-Workflow (gemessen 30 bis 110 Sekunden) durch ist. |
+| Instanz ersetzt (siehe Robustheit) | Instanz-ID nach GitHub, dann [Deploy `v1.5.1`](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/44294651346) |
+
+## Nachweis der Trennung
+
+| Release | Änderung | Lauf | Backend | Frontend |
+|---------|----------|------|---------|----------|
+| `v1.2.0` | nur Frontend: grüne Akzentfarbe | [44284933798](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/44284933798) | bleibt 1.1.0 | 1.1.0 → **1.2.0** |
+| Push auf `main` | `PerfectPlayer` in `main()` gemergt, ohne Tag | [main.yaml 44286086469](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/44286086469): nur CI und Coverage-Historie | bleibt 1.1.0 | bleibt 1.2.0 |
+| `v1.3.0` | nur Backend: `PerfectPlayer` statt `GreedyPlayer` | [44286515029](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/44286515029), Schritt "Deploy frontend" übersprungen | 1.1.0 → **1.3.0** | bleibt 1.2.0 |
+| `v1.4.0` | beides: Begrüssung im Spiel, Hinweis in den Regeln | [44288156673](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/44288156673) | → **1.4.0** | → **1.4.0** |
+
+Die Logs aller Läufe enthalten keine Credentials: GitHub maskiert sie (`***`), und eine Suche nach typischen
+Mustern (`ASIA…`, Session-Token-Präfix) findet nichts.
+
+## Reflexion und Ausblick
+
+### Weg einer Änderung
+
+```
+Backend-Änderung (z. B. src/main/…)
+  feature/* ──PR──► develop ──PR──► main ──► git tag v1.6.0
+     CI             CI             CI          release.yaml: changes (backend=true) → CI → Release (Jar + Archiv)
+                                                 → deploy: Jar → Artefakt-Bucket → SSM → Rauchtest → Symlink → Neustart
+                                                 → /version.txt == 1.6.0 ?  ✓ fertig  ✗ Workflow rot, alte Version läuft
+
+Frontend-Änderung (frontend/…)
+  feature/* ──PR──► develop ──PR──► main ──► git tag v1.6.0
+                                               release.yaml: changes (frontend=true) → CI → Release
+                                                 → deploy: Archiv → s3 sync --delete --exclude config.js
+                                                 → version.json == 1.6.0 ? config.js noch da ?
+```
+
+### Automatisiert und manuell
+
+| automatisiert | manuell |
+|---------------|---------|
+| Build, Tests, Release mit Artefakten | Tag setzen (bewusste Entscheidung für einen Release) |
+| Erkennen, was sich geändert hat | `tofu plan`/`tofu apply` bei Änderungen an `infra/` oder `deploy/` |
+| Deployment nur der geänderten Teile, Rauchtest, Versionsprüfung | Learner Lab starten, Credentials nach GitHub (`scripts/github-set-aws-credentials.sh`) |
+| Rollback per Knopf | Variablen nach GitHub nach jedem `apply`, das Adressen ändert (`scripts/github-set-infra-vars.sh`) |
+
+### Mehrere Umgebungen
+
+Damit dieselbe Infrastruktur dreimal existieren kann:
+
+- eine Variable `environment` (`dev`, `staging`, `prod`), die in Namen und Tags einfliesst (`tictactest-${var.environment}`)
+- ein eigener State pro Umgebung: getrennte Verzeichnisse mit eigenem `backend`, oder `tofu workspace`.
+  Mit nur einem State würde `apply` für staging die prod-Instanz ersetzen.
+- pro Umgebung eine `.tfvars`-Datei: Instanztyp, Anzahl Instanzen, erlaubte SSH-Quelle, evtl. Region oder Konto
+- eigene GitHub-Environments `dev`, `staging`, `production` mit je eigenen Variablen (und in einem echten Konto
+  je eigener OIDC-Rolle)
+
+**Gleich** pro Umgebung: die Konfiguration selbst (Module), AMI, Paket- und ttyd-Versionen, Dienst, nginx.
+**Verschieden**: Grösse (`t2.micro` vs. grösser, evtl. mehrere Instanzen hinter einem Load Balancer), Adressen
+und Domains, Buckets, Zugangsrechte, ob SSH überhaupt offen ist.
+
+### Promotion-Strategie
+
+```
+merge auf main ──► dev       automatisch bei jedem Merge, der CI besteht (Artefakt als Pre-Release, z. B. v1.6.0-rc.1)
+                     │  Smoke-Test + End-to-End-Test gegen dev (Partie über WebSocket spielen, Version prüfen)
+                     ▼
+Tag v1.6.0 ─────► staging   automatisch, dasselbe Artefakt wie in dev
+                     │  End-to-End-Tests, Lasttest (wie viele Partien gleichzeitig?), manuelle Abnahme
+                     ▼
+Knopf "promote" ─► prod     GitHub Environment "production" mit Required Reviewers: jemand anderes gibt frei
+```
+
+- **Dasselbe Artefakt**: Jede Umgebung bekommt das Jar und das Archiv des Releases, nichts wird neu gebaut. Nur so ist
+  das, was in prod läuft, genau das, was in staging getestet wurde. Ein neuer Build könnte andere Abhängigkeiten oder
+  einen anderen Compiler erwischen. Pro Umgebung unterscheidet sich nur die Konfiguration (`config.js`, Variablen),
+  und die kommt aus der Infrastruktur, nicht aus dem Artefakt.
+- **Auslöser**: Push/Merge → dev, Tag → staging, manueller Knopf mit Freigabe → prod. Ein erfolgreicher Test in einer
+  Umgebung macht den Release für die nächste verfügbar, deployt aber nicht automatisch nach prod.
+- **Prüfung vor der nächsten Umgebung**: unser Rauchtest und die Versionsabfrage reichen für dev. Für staging → prod
+  braucht es einen End-to-End-Test, der durch nginx und ttyd eine echte Partie spielt (wie unser WebSocket-Skript
+  beim Testen), und einen kurzen Lasttest.
+- **Wer darf nach prod?** Nur wer im GitHub Environment `production` als Reviewer eingetragen ist. Die Secrets für prod
+  sind nur in diesem Environment, also kann kein anderer Workflow sie benutzen.
+- **Änderungserkennung bei mehreren Umgebungen**: Der Vergleich "seit dem vorherigen Tag" geht davon aus, dass der
+  vorherige Release auch läuft. Hinkt staging zwei Releases hinterher, muss mit dem Release verglichen werden, der
+  *in dieser Umgebung* läuft. Diesen fragt man direkt ab (`/version.txt`, `version.json`) statt aus der Git-History
+  abzuleiten: deployed-Version der Umgebung → Tag → `git diff`. Oder einfacher: Promotion deployt immer beide Teile,
+  das ist bei wenigen kleinen Artefakten billiger als jeder Fehler beim Erkennen.

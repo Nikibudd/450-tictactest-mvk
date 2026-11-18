@@ -6,6 +6,8 @@ Wants=network-online.target
 [Service]
 User=tictactest
 Group=tictactest
+# UTF-8 für die Ausgabe des Spiels, unabhängig von der Locale der Instanz
+Environment=LANG=C.UTF-8
 # ttyd startet pro Verbindung genau das Jar, niemals eine Shell. --writable erlaubt Tastatureingaben.
 ExecStart=/usr/local/bin/ttyd --interface 127.0.0.1 --port 7681 --writable --max-clients 8 \
     --client-option titleFixed=TicTacTest --client-option disableLeaveAlert=true \
