@@ -162,3 +162,105 @@ Entscheidung: SSM.
 - Rauchtest: Ein Jar, das kein Jar ist, bricht das Deployment ab ("Invalid or corrupt jarfile"),
   SSM meldet `Failed`, die bisherige Version läuft weiter.
 - Last: 8 gleichzeitige Spiele brauchen 322 MB, die 9. Verbindung lehnt ttyd ab.
+- Release A (`v1.0.0`) und Release B (`v1.1.0`, Knopf "Neue Partie") von Hand deployt.
+  Nach Release B meldet `tofu plan`: "No changes. Your infrastructure matches the configuration."
+
+## Automatisches Deployment
+
+```
+Tag v1.2.0 ─► release.yaml
+               ├─ changes    Tag auf main? Vergleich mit dem vorherigen Tag v* → backend=true|false, frontend=true|false
+               ├─ ci         Build (Jar-Version aus dem Tag), Tests, Mutation, Coverage
+               ├─ release    GitHub-Release mit Jar und Frontend-Archiv
+               └─ deploy ──► deploy.yaml (nur wenn backend oder frontend geändert)
+                              ├─ Release vorhanden? AWS-Credentials gültig?
+                              ├─ scripts/deploy-backend.sh   (wenn backend)   → prüft /version.txt
+                              └─ scripts/deploy-frontend.sh  (wenn frontend)  → prüft version.json
+
+Actions → deploy → Run workflow (Tag, Backend ja/nein, Frontend ja/nein) ─► deploy.yaml
+```
+
+- **Nur bei einem Release**: `release.yaml` startet nur bei Tags `v*`. Ein Push auf `main` startet `main.yaml`
+  (CI und Coverage-Historie), das kein Deployment kennt.
+- **Nur Release-Artefakte**: `deploy.yaml` lädt Jar und Frontend-Archiv aus dem GitHub-Release, es baut nichts.
+- **Keine Infrastruktur**: Die Pipeline kennt kein `tofu`. Sie bekommt Instanz-ID, Buckets und URLs als
+  GitHub-Variablen. `tofu apply` läuft nur lokal.
+- **Keine parallelen Deployments**: `concurrency: deploy-production` mit `cancel-in-progress: false`.
+  Ein zweites Deployment wartet, bis das erste fertig ist. GitHub hält höchstens ein wartendes Deployment;
+  kommt ein drittes dazu, wird das wartende verworfen.
+- **Dieselben Skripte wie von Hand**: Die Pipeline ruft `scripts/deploy-backend.sh` und `scripts/deploy-frontend.sh`
+  auf. Was lokal funktioniert, funktioniert auch in der Pipeline.
+
+## Secrets-Konzept
+
+### Welche Zugangsdaten braucht die Pipeline?
+
+| Wert | Art | Herkunft | Gültigkeit | Ablage |
+|------|-----|----------|------------|--------|
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | **Secret** | Learner Lab, "AWS Details" | bis zum Ende der Lab-Session (max. 4 h) | Environment-Secret `production` |
+| `GITHUB_TOKEN` | Secret | automatisch von GitHub pro Lauf | nur während des Laufs | nichts zu tun, nur `contents: read` |
+| `AWS_REGION`, `INSTANCE_ID`, `ARTIFACT_BUCKET`, `FRONTEND_BUCKET`, `BACKEND_URL`, `FRONTEND_URL` | **Variable** | OpenTofu-Outputs | bis zum nächsten `tofu destroy` | Environment-Variable `production` |
+
+Kein SSH-Schlüssel: Das Deployment läuft über SSM, die Instanz holt das Jar selbst über ihr Instance Profile.
+
+**Secrets vs. Variables**: Secrets sind verschlüsselt, lassen sich nach dem Speichern nicht mehr lesen und
+werden in Logs als `***` maskiert. Variables sind Klartext und in Logs sichtbar. Alles, womit man auf das
+AWS-Konto zugreifen kann, ist ein Secret. Adressen und Namen, die nur zusammen mit den Credentials nützen und
+ohnehin in den Outputs stehen, sind Variables. So bleiben sie lesbar und man sieht im Log, wohin deployt wurde.
+
+**Environment statt Repository**: Secrets und Variables liegen im GitHub-Environment `production`.
+Es lässt nur `main` und Tags `v*` zu. Ein Workflow auf einem Feature-Branch kann die Credentials nicht verwenden.
+
+### Einrichten und erneuern
+
+```
+scripts/github-set-infra-vars.sh        # nach tofu apply: Environment anlegen, Variablen aus den Outputs setzen
+scripts/github-set-aws-credentials.sh   # nach jedem "Start Lab": Credentials aus dem Profil learnerlab übertragen
+```
+
+Die Credentials gehen über stdin an `gh secret set`, sie stehen weder in der Kommandozeile noch in der History.
+Das Skript verwendet fest das Profil `learnerlab` und ignoriert `AWS_PROFILE`: Das zeigt in der eigenen Shell
+unter Umständen auf ein ganz anderes Konto. Genau das ist uns beim ersten Einrichten passiert: Für etwa eine Minute
+lagen die Werte eines fremden Profils im Environment, bevor wir sie überschrieben haben. Kein Workflow hatte
+sie verwendet, weil der Deploy-Workflow noch nicht existierte.
+
+### Abgelaufene Credentials
+
+Die Learner-Lab-Credentials laufen mit jeder Session ab. Es gibt keinen Weg, sie automatisch zu erneuern:
+Nur wer im Learner Lab eingeloggt ist, bekommt neue.
+
+- **Erkennen**: Der erste Schritt im Deploy-Job ist `aws sts get-caller-identity`. Mit abgelaufenen Credentials
+  schlägt er mit einer klaren Meldung fehl, bevor etwas deployt wird. Der Release selbst entsteht trotzdem.
+- **Nachdeployen**: Lab starten, `scripts/github-set-aws-credentials.sh`, dann im fehlgeschlagenen Lauf
+  "Re-run failed jobs". Ein Re-Run liest die Secrets neu. Alternativ den Deploy-Workflow von Hand mit dem Tag starten.
+- Die Instanz selbst ist nicht betroffen: Sie läuft mit dem Instance Profile, dessen Credentials AWS laufend erneuert.
+
+### Wer kann die Secrets sehen oder benutzen?
+
+- **Sehen**: niemand, auch nicht die Repo-Besitzerin. Man kann sie nur überschreiben oder löschen.
+- **Benutzen**: Workflows, die im Environment `production` laufen, also nur auf `main` oder einem Tag `v*`.
+  Wer auf `main` pushen oder Tags setzen darf, kann einen Workflow schreiben, der sie benutzt.
+- **Logs**: GitHub maskiert Secret-Werte. Abgeleitete Werte (z. B. Base64 eines Secrets) erkennt es nicht.
+  Deshalb geben die Skripte nie Credentials aus, und `set -x` kommt in den Deploy-Skripten nicht vor.
+  Die Logs haben wir nach den Läufen kontrolliert.
+- **Forks und Pull Requests**: Workflows aus Forks bekommen keine Secrets. Pull Requests aus dem eigenen Repo laufen
+  auf ihrem Branch, und der darf das Environment nicht benutzen.
+
+### Schaden und Reaktion
+
+Mit den Learner-Lab-Credentials kann man im Lab-Konto alles tun, was die Rolle `voclabs` darf: Instanzen starten
+(Kosten, Budget des Labs aufgebraucht), Buckets löschen, unsere Instanz übernehmen. Der Schaden ist auf das
+Sandbox-Konto und höchstens die Dauer der Session begrenzt.
+
+Reaktion: Lab-Session beenden (macht die Credentials ungültig), in AWS nach fremden Ressourcen suchen,
+im Learner Lab "Reset" falls nötig, Infrastruktur mit `tofu apply` neu aufbauen, neue Credentials setzen.
+In einem echten Konto: Schlüssel sofort deaktivieren, CloudTrail auswerten, Schlüssel ersetzen.
+
+### Im echten Unternehmen: OIDC
+
+Ohne Learner-Lab-Einschränkungen speichert man gar keine AWS-Credentials in GitHub. GitHub Actions bekommt pro
+Lauf ein signiertes OIDC-Token, das Repository, Branch/Tag und Environment enthält. In AWS vertraut eine
+IAM-Rolle diesem Identity Provider nur für `repo:Nikibudd/450-tictactest-mvk:environment:production`.
+`aws-actions/configure-aws-credentials` tauscht das Token gegen kurzlebige Credentials (z. B. 1 Stunde).
+Es gibt nichts, was ablaufen, rotiert oder gestohlen werden müsste. Im Learner Lab geht das nicht, weil wir
+weder Identity Provider noch IAM-Rollen anlegen dürfen.
