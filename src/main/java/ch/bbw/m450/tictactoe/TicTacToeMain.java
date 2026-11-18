@@ -19,6 +19,7 @@ public class TicTacToeMain {
 	}
 
 	public static void main(String[] args) {
+		System.out.println("TicTacTest: you play X against the PerfectPlayer, a draw is the best you can get.");
 		play(new HumanPlayer(), new PerfectPlayer());
 	}
 
