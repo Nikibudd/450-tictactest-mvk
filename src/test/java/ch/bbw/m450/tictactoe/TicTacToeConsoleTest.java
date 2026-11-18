@@ -21,6 +21,7 @@ class TicTacToeConsoleTest implements WithAssertions {
 		TicTacToeMain.main(NO_ARGS);
 
 		assertThat(out.capturedLines())
+				.startsWith("TicTacTest: you play X against the PerfectPlayer, a draw is the best you can get.")
 				.endsWith("it's a draw!")
 				.filteredOn(line -> line.startsWith("where to"))
 				.hasSize(5);
