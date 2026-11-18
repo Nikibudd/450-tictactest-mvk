@@ -38,7 +38,7 @@ application {
 jar {
 	// makes the jar runnable with `java -jar`
 	manifest {
-		attributes 'Main-Class': application.mainClass.get()
+		attributes 'Main-Class': 'ch.bbw.m450.tictactoe.DoesNotExist' // deliberately broken: tests the deployment's smoke test
 	}
 }
 
