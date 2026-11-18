@@ -1,0 +1,21 @@
+[Unit]
+Description=TicTacTest Web-Konsole (ttyd)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=tictactest
+Group=tictactest
+# ttyd startet pro Verbindung genau das Jar, niemals eine Shell. --writable erlaubt Tastatureingaben.
+ExecStart=/usr/local/bin/ttyd --interface 127.0.0.1 --port 7681 --writable --max-clients 8 \
+    --client-option titleFixed=TicTacTest --client-option disableLeaveAlert=true \
+    java -Xmx32m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -jar /opt/tictactest/current/tictactest.jar
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

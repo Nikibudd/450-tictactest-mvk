@@ -1,5 +1,10 @@
 on:
   workflow_call:
+    inputs:
+      version:
+        description: Jar version, e.g. a release tag (a leading v is dropped); defaults to the 12-char commit hash
+        type: string
+        default: ''
 
 jobs:
   build:
@@ -16,8 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build (jar version = 12-char commit hash)
-        run: ./gradlew build -x test -Pversion="$(echo "$GITHUB_SHA" | cut -c1-12)"
+      - name: Build (jar version = release version or 12-char commit hash)
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="${VERSION#v}"
+          ./gradlew build -x test -Pversion="${VERSION:-$(echo "$GITHUB_SHA" | cut -c1-12)}"
 
       - name: Upload jar
         uses: actions/upload-artifact@v4
