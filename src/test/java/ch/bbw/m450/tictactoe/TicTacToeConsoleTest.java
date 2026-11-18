@@ -9,21 +9,21 @@ import org.junitpioneer.jupiter.StdOut;
 
 /**
  * End-to-end tests of the console game: moves of the human player come from stdin, the game is checked on stdout.
- * The computer opponent in {@link TicTacToeMain#main(String[])} is the {@code GreedyPlayer} (first free field).
+ * The computer opponent in {@link TicTacToeMain#main(String[])} is the {@code PerfectPlayer}: it never loses.
  */
 class TicTacToeConsoleTest implements WithAssertions {
 
 	private static final String[] NO_ARGS = {};
 
 	@Test
-	@StdIo({"0", "3", "6"})
-	void given_humanCompletesLeftColumn_when_mainIsRun_then_announcesCrossAsWinner(StdOut out) {
+	@StdIo({"4", "2", "3", "7", "8"})
+	void given_humanPlaysPerfectly_when_mainIsRun_then_endsInDraw(StdOut out) {
 		TicTacToeMain.main(NO_ARGS);
 
 		assertThat(out.capturedLines())
-				.endsWith("...and the winner is: CROSS")
+				.endsWith("it's a draw!")
 				.filteredOn(line -> line.startsWith("where to"))
-				.hasSize(3);
+				.hasSize(5);
 	}
 
 	@Test

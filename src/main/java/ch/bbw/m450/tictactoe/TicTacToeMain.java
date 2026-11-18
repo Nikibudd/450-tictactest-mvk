@@ -3,11 +3,11 @@ package ch.bbw.m450.tictactoe;
 import java.util.Arrays;
 
 import ch.bbw.m450.tictactoe.TicTacToePlayer.Stone;
-import ch.bbw.m450.tictactoe.players.GreedyPlayer;
 import ch.bbw.m450.tictactoe.players.HumanPlayer;
+import ch.bbw.m450.tictactoe.players.PerfectPlayer;
 
 /**
- * A small tic-tac-toe board. Initially with a human and a primitive but valid computer player.
+ * A small tic-tac-toe board: a human against the unbeatable {@link PerfectPlayer}.
  */
 @SuppressWarnings("java:S106") // a console game: stdout is the user interface, not logging
 public class TicTacToeMain {
@@ -19,7 +19,7 @@ public class TicTacToeMain {
 	}
 
 	public static void main(String[] args) {
-		play(new HumanPlayer(), new GreedyPlayer());
+		play(new HumanPlayer(), new PerfectPlayer());
 	}
 
 	/**
