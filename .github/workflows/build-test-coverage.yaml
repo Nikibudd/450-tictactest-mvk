@@ -6,10 +6,6 @@ on:
         type: string
         default: ''
 
-# fixed location so actions/cache and Gradle agree (Java's user.home in the container is not $HOME)
-env:
-  GRADLE_USER_HOME: /github/home/.gradle
-
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -24,16 +20,6 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v4
-
-      # dependencies from the cache instead of Maven Central, which rate-limits (HTTP 429) frequent CI runs
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            /github/home/.gradle/caches
-            /github/home/.gradle/wrapper
-          key: gradle-${{ github.job }}-${{ hashFiles('build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/gradle-daemon-jvm.properties') }}
-          restore-keys: gradle-${{ github.job }}-
 
       - name: Build (jar version = release version or 12-char commit hash)
         env:
@@ -63,16 +49,6 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v4
-
-      # dependencies from the cache instead of Maven Central, which rate-limits (HTTP 429) frequent CI runs
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            /github/home/.gradle/caches
-            /github/home/.gradle/wrapper
-          key: gradle-${{ github.job }}-${{ hashFiles('build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/gradle-daemon-jvm.properties') }}
-          restore-keys: gradle-${{ github.job }}-
 
       - name: Test and verify coverage (branch coverage >= 90 %)
         run: ./gradlew test jacocoTestCoverageVerification
@@ -119,16 +95,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # dependencies from the cache instead of Maven Central, which rate-limits (HTTP 429) frequent CI runs
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            /github/home/.gradle/caches
-            /github/home/.gradle/wrapper
-          key: gradle-${{ github.job }}-${{ hashFiles('build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/gradle-daemon-jvm.properties') }}
-          restore-keys: gradle-${{ github.job }}-
-
       - name: Mutation testing with PIT (mutation score >= 90 %)
         run: ./gradlew pitest
 
@@ -154,16 +120,6 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v4
-
-      # dependencies from the cache instead of Maven Central, which rate-limits (HTTP 429) frequent CI runs
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            /github/home/.gradle/caches
-            /github/home/.gradle/wrapper
-          key: gradle-${{ github.job }}-${{ hashFiles('build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/gradle-daemon-jvm.properties') }}
-          restore-keys: gradle-${{ github.job }}-
 
       - name: Download JaCoCo execution data
         uses: actions/download-artifact@v4
