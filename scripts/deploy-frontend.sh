@@ -14,7 +14,9 @@ trap 'rm -rf "$WORK"' EXIT
 
 echo "1/2 Frontend-Archiv aus Release $TAG in den Bucket synchronisieren"
 gh release download "$TAG" -R "$REPO" -p 'tictactest-frontend-*.zip' -D "$WORK"
-unzip -q "$WORK"/tictactest-frontend-*.zip -d "$WORK/site"
+# -DD: Zeitstempel auf jetzt setzen. aws s3 sync lädt nur hoch, was grösser oder neuer ist; beim Rollback sind die
+# Dateien eines älteren Releases sonst älter als die im Bucket, und gleich grosse wie version.json blieben stehen.
+unzip -q -DD "$WORK"/tictactest-frontend-*.zip -d "$WORK/site"
 # --delete entfernt Dateien, die es im neuen Frontend nicht mehr gibt; --exclude schützt config.js davor
 aws s3 sync "$WORK/site" "s3://$FRONTEND_BUCKET" --delete --exclude config.js --cache-control no-cache --only-show-errors
 
