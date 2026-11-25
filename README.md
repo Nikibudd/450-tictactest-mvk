@@ -2,7 +2,7 @@
 
 Tic-Tac-Toe als Konsolen-Applikation (Modul 450), im Modul 324 als Web-App in die Cloud gebracht.
 
-**Spielen: <http://rh23rtwzslpu2cvuioxoqxy6p-qnuyanbco3ae.s3-website-us-east-1.amazonaws.com>**
+**Spielen: <http://esklgor9lojpjlcambdvtvsgc-kcwobptdsysq.s3-website-us-east-1.amazonaws.com>**
 
 Das Jar aus dem GitHub-Release läuft unverändert in einer Web-Konsole (ttyd) auf einer EC2-Instanz,
 das Frontend ist eine statische Seite in einem S3-Bucket.

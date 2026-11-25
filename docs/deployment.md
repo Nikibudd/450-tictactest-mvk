@@ -183,6 +183,25 @@ Eine Änderung an der Einrichtung ist also immer auch ein Deployment: Instanz-ID
 aktuelle Version erneut deployen. Ohne `user_data_replace_on_change` hätte OpenTofu die Instanz nur gestoppt und
 gestartet, `user_data` wäre aber nicht noch einmal gelaufen: Die Änderung hätte nichts bewirkt.
 
+### Neuaufbau in einem anderen Lab-Konto
+
+Am 25.11.2026 lieferte das Learner Lab Credentials für ein anderes, leeres AWS-Konto als am 18.11.2026. Auf das alte
+Konto hatten wir keinen Zugriff mehr (Instanz nicht auffindbar, Buckets `403`, Backend nicht erreichbar). Darum haben
+wir die Umgebung mit leerem State neu aufgebaut. Der alte State ist lokal gesichert. Das war **kein** `tofu destroy`:
+Die alten Ressourcen wurden dabei nicht gelöscht.
+
+- `tofu plan`: "9 to add, 0 to change, 0 to destroy". `tofu apply` dauerte rund 30 Sekunden, ein weiterer Plan
+  meldet keine Änderungen.
+- **Geändert haben sich**: Konto, Instanz-ID, Elastic IP und damit `backend_url`, `version_url` und `ssh_command`,
+  beide Bucket-Namen und damit `frontend_url`. Gleich bleiben Region, AMI, Paketversionen und SSH-Schlüssel.
+- **In GitHub anpassen**: alle Variablen ausser `AWS_REGION` (`scripts/github-set-infra-vars.sh`), dazu die drei
+  Secrets (`scripts/github-set-aws-credentials.sh`). Ausserdem der Link im README.
+- **Version wiederherstellen**: Deploy-Workflow mit `v1.5.1`, Backend
+  ([Lauf](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/45570305655)) und Frontend
+  ([Lauf](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/45573262420)). Danach zeigen beide 1.5.1, eine
+  Partie ist im Browser-Protokoll (WebSocket) durchgespielt, `tofu plan` bleibt ohne Änderungen. `config.js` mit der
+  neuen Adresse hat OpenTofu geschrieben, das Frontend-Deployment hat sie nicht angetastet.
+
 ## Automatisches Deployment
 
 ```
@@ -251,6 +270,10 @@ Nur wer im Learner Lab eingeloggt ist, bekommt neue.
   schlägt er mit einer klaren Meldung fehl, bevor etwas deployt wird. Der Release selbst entsteht trotzdem.
 - **Nachdeployen**: Lab starten, `scripts/github-set-aws-credentials.sh`, dann im fehlgeschlagenen Lauf
   "Re-run failed jobs". Ein Re-Run liest die Secrets neu. Alternativ den Deploy-Workflow von Hand mit dem Tag starten.
+- **Getestet** am 25.11.2026 mit den Credentials vom 18.11.2026:
+  [Lauf](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/45570305655), Versuch 1 scheitert bei "Check AWS
+  credentials" mit `InvalidClientTokenId` und unserem Hinweis, beide Deploy-Schritte sind übersprungen. Versuch 2
+  ("Re-run failed jobs" mit neuen Credentials und Variablen) deployt 1.5.1.
 - Die Instanz selbst ist nicht betroffen: Sie läuft mit dem Instance Profile, dessen Credentials AWS laufend erneuert.
 
 ### Wer kann die Secrets sehen oder benutzen?
