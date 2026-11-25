@@ -183,24 +183,38 @@ Eine Änderung an der Einrichtung ist also immer auch ein Deployment: Instanz-ID
 aktuelle Version erneut deployen. Ohne `user_data_replace_on_change` hätte OpenTofu die Instanz nur gestoppt und
 gestartet, `user_data` wäre aber nicht noch einmal gelaufen: Die Änderung hätte nichts bewirkt.
 
-### Neuaufbau in einem anderen Lab-Konto
+### Learner-Lab-Session beenden und neu starten
 
-Am 25.11.2026 lieferte das Learner Lab Credentials für ein anderes, leeres AWS-Konto als am 18.11.2026. Auf das alte
-Konto hatten wir keinen Zugriff mehr (Instanz nicht auffindbar, Buckets `403`, Backend nicht erreichbar). Darum haben
-wir die Umgebung mit leerem State neu aufgebaut. Der alte State ist lokal gesichert. Das war **kein** `tofu destroy`:
-Die alten Ressourcen wurden dabei nicht gelöscht.
+Experiment am 25.11.2026: Lab beendet und neu gestartet, dazwischen nichts deployt.
 
-- `tofu plan`: "9 to add, 0 to change, 0 to destroy". `tofu apply` dauerte rund 30 Sekunden, ein weiterer Plan
-  meldet keine Änderungen.
-- **Geändert haben sich**: Konto, Instanz-ID, Elastic IP und damit `backend_url`, `version_url` und `ssh_command`,
-  beide Bucket-Namen und damit `frontend_url`. Gleich bleiben Region, AMI, Paketversionen und SSH-Schlüssel.
-- **In GitHub anpassen**: alle Variablen ausser `AWS_REGION` (`scripts/github-set-infra-vars.sh`), dazu die drei
-  Secrets (`scripts/github-set-aws-credentials.sh`). Ausserdem der Link im README.
-- **Version wiederherstellen**: Deploy-Workflow mit `v1.5.1`, Backend
-  ([Lauf](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/45570305655)) und Frontend
-  ([Lauf](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/45573262420)). Danach zeigen beide 1.5.1, eine
-  Partie ist im Browser-Protokoll (WebSocket) durchgespielt, `tofu plan` bleibt ohne Änderungen. `config.js` mit der
-  neuen Adresse hat OpenTofu geschrieben, das Frontend-Deployment hat sie nicht angetastet.
+- Die Instanz wurde um 08:24 UTC gestoppt und um 08:37 UTC wieder gestartet. Laut CloudTrail war es beide Male
+  dieselbe Identität des Labs (`exec…`), nicht unsere Rolle.
+- **Gleiche URL und IP** (Elastic IP), **gleiche Version** (1.5.1): Der Dienst lief 12 Sekunden nach dem Start der
+  Instanz, als Benutzer `tictactest`, `current` zeigt weiterhin auf `releases/1.5.1`. Eine Partie ist über den
+  WebSocket durchgespielt, `tofu plan` meldet keine Änderungen.
+- Einschränkung: Nach dem ersten Neustart der Session war die Instanz 6 Minuten nach dem Stopp noch gestoppt, erst ein
+  zweiter Neustart der Session brachte sie zurück. Die Ursache kennen wir nicht.
+- Die Credentials der alten Session sind danach gesperrt (`voc-cancel-cred`), auch ein `tofu plan` braucht neue.
+
+### `tofu destroy` und `tofu apply`
+
+Am 25.11.2026 mussten wir das Lab wechseln, weil das bisherige abgelaufen war und wir eine neue Einladung erhielten.
+Darum liefen `destroy` und `apply` in verschiedenen AWS-Konten, nicht im selben. Die geänderten Werte wären im selben
+Konto die gleichen, ausser der Kontonummer.
+
+- `tofu destroy`: "9 to destroy", nach 29 Sekunden fertig, inklusive Leeren der Buckets. In `us-east-1` blieben keine
+  Elastic IP, Volumes oder Buckets übrig.
+- `tofu apply` mit leerem State: "9 to add", rund 30 Sekunden, ein weiterer Plan meldet keine Änderungen.
+- **Geändert haben sich**: Instanz-ID, Elastic IP und damit `backend_url`, `version_url` und `ssh_command`, beide
+  Bucket-Namen und damit `frontend_url`. Gleich bleiben Region, AMI-Name, Paketversionen und SSH-Schlüssel.
+- **In GitHub anpassen**: alle Variablen ausser `AWS_REGION` (`scripts/github-set-infra-vars.sh`) und, wenn neue
+  Credentials nötig sind, die drei Secrets (`scripts/github-set-aws-credentials.sh`). Ausserdem den Link im README.
+- **Version wiederherstellen**: Sobald die Instanz eingerichtet ist, Deploy-Workflow mit `v1.5.1`, Backend und Frontend
+  ([Lauf](https://github.com/Nikibudd/450-tictactest-mvk/actions/runs/45579935103), 26 Sekunden). Danach zeigen beide
+  1.5.1, eine Partie ist durchgespielt und `tofu plan` bleibt ohne Änderungen. `config.js` mit der neuen Adresse hat
+  OpenTofu geschrieben, das Frontend-Deployment hat sie nicht angetastet.
+- Das Konto vom 18.11.2026 war zu diesem Zeitpunkt nicht mehr zugänglich (Instanz nicht auffindbar, Buckets `403`).
+  Dort konnten wir nicht mehr aufräumen. Lehre: `tofu destroy` ausführen, solange das Lab noch offen ist.
 
 ## Automatisches Deployment
 
